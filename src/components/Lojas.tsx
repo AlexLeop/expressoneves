@@ -144,7 +144,7 @@ export function Lojas() {
 
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Valor Corrida >5km
+                    Valor Corrida {'>'}5km
                   </label>
                   <input
                     type="number"
@@ -242,7 +242,7 @@ export function Lojas() {
                 </span>
               </div>
               <div className="flex justify-between">
-                <span className="text-gray-600">Corrida >5km:</span>
+                <span className="text-gray-600">Corrida {'>'}5km:</span>
                 <span className="font-medium text-green-600">
                   R$ {loja.valorCorridaAcima5km.toFixed(2)}
                 </span>
