@@ -221,7 +221,7 @@ export function Jornadas() {
 
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Corridas >5km
+                    Corridas {'>'}5km
                   </label>
                   <input
                     type="number"
@@ -366,7 +366,7 @@ export function Jornadas() {
                   <span className="text-gray-600">Corridas:</span>
                   <p className="font-medium text-blue-600">{totalCorridas} total</p>
                   <p className="text-xs text-gray-500">
-                    {jornada.corridasAte5km} ≤5km, {jornada.corridasAcima5km} >5km
+                    {jornada.corridasAte5km} ≤5km, {jornada.corridasAcima5km} {'>'}5km
                   </p>
                 </div>
 
