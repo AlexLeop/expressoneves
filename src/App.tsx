@@ -4,9 +4,13 @@ import { Toaster } from 'react-hot-toast';
 import { 
   PDR, 
   Dashboard, 
-  Funcionarios, 
-  Configuracoes, 
-  Relatorios 
+  Motoboys, 
+  Lojas, 
+  Jornadas, 
+  Adiantamentos, 
+  Debitos, 
+  RelatorioLojas, 
+  RelatorioMotoboys 
 } from './components';
 
 function MainApp() {
@@ -99,12 +103,20 @@ function MainApp() {
         return <Dashboard data={data} />;
       case 'pdr':
         return <PDR data={data} />;
-      case 'funcionarios':
-        return <Funcionarios data={data} />;
-      case 'relatorios':
-        return <Relatorios data={data} />;
-      case 'configuracoes':
-        return <Configuracoes />;
+      case 'motoboys':
+        return <Motoboys data={data} />;
+      case 'lojas':
+        return <Lojas data={data} />;
+      case 'jornadas':
+        return <Jornadas data={data} />;
+      case 'adiantamentos':
+        return <Adiantamentos data={data} />;
+      case 'debitos':
+        return <Debitos data={data} />;
+      case 'relatorio-lojas':
+        return <RelatorioLojas data={data} />;
+      case 'relatorio-motoboys':
+        return <RelatorioMotoboys data={data} />;
       default:
         return <Dashboard data={data} />;
     }
@@ -141,9 +153,13 @@ function MainApp() {
             {[
               { id: 'dashboard', label: 'Dashboard' },
               { id: 'pdr', label: 'PDR' },
-              { id: 'funcionarios', label: 'Funcionários' },
-              { id: 'relatorios', label: 'Relatórios' },
-              { id: 'configuracoes', label: 'Configurações' }
+              { id: 'motoboys', label: 'Motoboys' },
+              { id: 'lojas', label: 'Lojas' },
+              { id: 'jornadas', label: 'Jornadas' },
+              { id: 'adiantamentos', label: 'Adiantamentos' },
+              { id: 'debitos', label: 'Débitos' },
+              { id: 'relatorio-lojas', label: 'Relatório Lojas' },
+              { id: 'relatorio-motoboys', label: 'Relatório Motoboys' }
             ].map((tab) => (
               <button
                 key={tab.id}
