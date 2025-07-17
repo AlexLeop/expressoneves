@@ -1,11 +1,27 @@
 // <stdin>
 import React, { useState, useEffect } from "https://esm.sh/react@18.2.0";
-import { PlusCircle, Users, Store, Calendar, DollarSign, FileText, Settings, Eye, Edit, Trash2, Download, Upload } from "https://esm.sh/lucide-react?deps=react@18.2.0,react-dom@18.2.0";
+import { createClient } from "https://esm.sh/@supabase/supabase-js?deps=react@18.2.0,react-dom@18.2.0";
 import jsPDF from "https://esm.sh/jspdf?deps=react@18.2.0,react-dom@18.2.0";
-import autoTable from "https://esm.sh/jspdf-autotable?deps=react@18.2.0,react-dom@18.2.0";
+import toast, { Toaster } from "https://esm.sh/react-hot-toast?deps=react@18.2.0,react-dom@18.2.0";
 var { useStoredState } = hatch;
-var MotoboysSystem = () => {
-  const [isAuthenticated, setIsAuthenticated] = useStoredState("isAuthenticated", false);
+var supabaseUrl = "https://exfljeezwtnidjsiynei.supabase.co";
+var supabaseAnonKey = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImV4ZmxqZWV6d3RuaWRqc2l5bmVpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Mzc2NjA3NzUsImV4cCI6MjA1MzIzNjc3NX0.c8xn6l6o0PBKgJ-lO8cgG8TsItzM3Qf9pHGhZSWJQWs";
+var supabase = createClient(supabaseUrl, supabaseAnonKey, {
+  auth: {
+    persistSession: false,
+    autoRefreshToken: false
+  },
+  db: {
+    schema: "public"
+  },
+  realtime: {
+    params: {
+      eventsPerSecond: 10
+    }
+  }
+});
+var ExpressoNevesApp = () => {
+  const [activeTab, setActiveTab] = useState("dashboard");
   const [currentUser, setCurrentUser] = useStoredState("currentUser", null);
   const [colaboradores, setColaboradores] = useStoredState("colaboradores", [
     {
@@ -19,1558 +35,3486 @@ var MotoboysSystem = () => {
       dataCriacao: "2025-01-01"
     }
   ]);
-  const [activeTab, setActiveTab] = useState("dashboard");
   const [motoboys, setMotoboys] = useStoredState("motoboys", []);
   const [lojas, setLojas] = useStoredState("lojas", []);
   const [jornadas, setJornadas] = useStoredState("jornadas", []);
   const [adiantamentos, setAdiantamentos] = useStoredState("adiantamentos", []);
-  const [supervisao, setSupervisao] = useStoredState("supervisao", []);
-  const [selectedWeek, setSelectedWeek] = useState("2025-01-13");
-  const [showMotoboyModal, setShowMotoboyModal] = useState(false);
-  const [showLojaModal, setShowLojaModal] = useState(false);
-  const [showJornadaModal, setShowJornadaModal] = useState(false);
-  const [showAdiantamentoModal, setShowAdiantamentoModal] = useState(false);
-  const [showColaboradorModal, setShowColaboradorModal] = useState(false);
-  const [editingItem, setEditingItem] = useState(null);
-  const login = (email, senha) => {
-    const colaborador = colaboradores.find(
-      (c) => c.email === email && c.senha === senha && c.ativo
-    );
-    if (colaborador) {
-      setCurrentUser(colaborador);
-      setIsAuthenticated(true);
-      return true;
+  const [debitosPendentes, setDebitosPendentes] = useStoredState("debitosPendentes", []);
+  const [isOnline, setIsOnline] = useState(false);
+  const [syncStatus, setSyncStatus] = useState("offline");
+  const [showJornadaForm, setShowJornadaForm] = useState(false);
+  const [editingJornada, setEditingJornada] = useState(null);
+  const [motoboyForm, setMotoboyForm] = useState({
+    nome: "",
+    cpf: "",
+    telefone: "",
+    status: "ativo"
+  });
+  const [filtros, setFiltros] = useState({
+    dataInicio: "",
+    dataFim: "",
+    motoboyId: "",
+    lojaId: "",
+    eFeriado: false,
+    busca: ""
+  });
+  const [jornadasFiltradas, setJornadasFiltradas] = useState(jornadas);
+  const [lojaForm, setLojaForm] = useState({
+    nome: "",
+    cnpj: "",
+    contato: "",
+    valorHoraSegSab: 12,
+    valorHoraDomFeriado: 13.33,
+    valorCorridaAte5km: 5,
+    valorCorridaAcima5km: 8,
+    taxaAdministrativa: 350,
+    taxaSupervisao: 50,
+    limiteValorFixo: 1e3,
+    percentualTaxa: 10,
+    usarTaxaPercentual: false
+  });
+  const [editingLoja, setEditingLoja] = useState(null);
+  const [editingMotoboy, setEditingMotoboy] = useState(null);
+  const [filtrosMotoboy, setFiltrosMotoboy] = useState({
+    nome: "",
+    status: "",
+    cpf: ""
+  });
+  const [motoboysFiltrados, setMotoboysFiltrados] = useState(motoboys);
+  const [jornadaForm, setJornadaForm] = useState({
+    data: "",
+    motoboyId: "",
+    lojaId: "",
+    valorDiaria: 120,
+    valorCorridas: 0,
+    comissoes: 0,
+    missoes: 0,
+    descontos: 0,
+    eFeriado: false,
+    observacoes: ""
+  });
+  const [cadastroMultiplo, setCadastroMultiplo] = useState(false);
+  const [jornadaMultiplaForm, setJornadaMultiplaForm] = useState({
+    data: "",
+    lojaId: "",
+    eFeriado: false,
+    motoboys: []
+    // Array com {motoboyId, valorDiaria, valorCorridas, comissoes, missoes, descontos, observacoes}
+  });
+  const [adiantamentoForm, setAdiantamentoForm] = useState({
+    motoboyId: "",
+    lojaId: "",
+    valor: 0,
+    data: "",
+    observacao: ""
+  });
+  const [debitoForm, setDebitoForm] = useState({
+    lojaId: "",
+    descricao: "",
+    valor: 0,
+    dataVencimento: "",
+    status: "pendente"
+  });
+  const [relatorioConfig, setRelatorioConfig] = useState({
+    dataInicio: "",
+    dataFim: ""
+  });
+  const [relatorioLojas, setRelatorioLojas] = useState([]);
+  const [relatorioMotoboyConfig, setRelatorioMotoboyConfig] = useState({
+    dataInicio: "",
+    dataFim: ""
+  });
+  const [relatorioMotoboyLojas, setRelatorioMotoboyLojas] = useState([]);
+  const [loginForm, setLoginForm] = useState({
+    email: "",
+    senha: ""
+  });
+  const [colaboradorForm, setColaboradorForm] = useState({
+    nome: "",
+    email: "",
+    senha: "",
+    tipo: "lojista",
+    lojaId: ""
+  });
+  const [editingColaborador, setEditingColaborador] = useState(null);
+  const [editingDebito, setEditingDebito] = useState(null);
+  const getLojasFiltradas = () => {
+    if (currentUser?.tipo === "lojista" && currentUser?.lojaId) {
+      return lojas.filter((loja) => loja.id === currentUser.lojaId);
     }
-    return false;
+    return lojas;
   };
-  const logout = () => {
-    setIsAuthenticated(false);
+  const getJornadasFiltradas = (todasJornadas = jornadas) => {
+    if (currentUser?.tipo === "lojista" && currentUser?.lojaId) {
+      return todasJornadas.filter((jornada) => jornada.lojaId === currentUser.lojaId);
+    }
+    return todasJornadas;
+  };
+  const getAdiantamentosFiltrados = () => {
+    if (currentUser?.tipo === "lojista" && currentUser?.lojaId) {
+      return adiantamentos.filter((adiantamento) => adiantamento.lojaId === currentUser.lojaId);
+    }
+    return adiantamentos;
+  };
+  const getDebitosFiltrados = () => {
+    if (currentUser?.tipo === "lojista" && currentUser?.lojaId) {
+      return debitosPendentes.filter((debito) => debito.lojaId === currentUser.lojaId);
+    }
+    return debitosPendentes;
+  };
+  const testConnection = async () => {
+    try {
+      console.log("\u{1F517} Testando conex\xE3o com Supabase...");
+      const { data, error } = await supabase.from("colaboradores").select("count").limit(1);
+      if (error) {
+        console.error("\u274C Erro de conex\xE3o:", error);
+        throw error;
+      }
+      console.log("\u2705 Conex\xE3o com Supabase estabelecida!");
+      setIsOnline(true);
+      setSyncStatus("online");
+      return true;
+    } catch (error) {
+      console.error("\u274C Falha na conex\xE3o:", error);
+      setIsOnline(false);
+      setSyncStatus("offline");
+      return false;
+    }
+  };
+  const syncAllData = async () => {
+    if (!isOnline) return;
+    setSyncStatus("syncing");
+    try {
+      console.log("\u{1F504} Iniciando sincroniza\xE7\xE3o...");
+      console.log("\u2705 Sincroniza\xE7\xE3o conclu\xEDda!");
+    } catch (error) {
+      console.error("\u274C Erro na sincroniza\xE7\xE3o:", error);
+    } finally {
+      setSyncStatus("online");
+    }
+  };
+  const formatCPF = (value) => {
+    const cleanValue = value.replace(/\D/g, "");
+    const match = cleanValue.match(/^(\d{3})(\d{3})(\d{3})(\d{2})$/);
+    if (match) {
+      return `${match[1]}.${match[2]}.${match[3]}-${match[4]}`;
+    }
+    return cleanValue.replace(/(\d{3})(\d{3})(\d{3})(\d{0,2})/, "$1.$2.$3-$4").replace(/-$/, "");
+  };
+  const formatTelefone = (value) => {
+    const cleanValue = value.replace(/\D/g, "");
+    const match = cleanValue.match(/^(\d{2})(\d{4,5})(\d{4})$/);
+    if (match) {
+      return `(${match[1]}) ${match[2]}-${match[3]}`;
+    }
+    return cleanValue.replace(/(\d{2})(\d{4,5})(\d{0,4})/, "($1) $2-$3").replace(/-$/, "");
+  };
+  useEffect(() => {
+    testConnection();
+  }, []);
+  useEffect(() => {
+    setJornadasFiltradas(getJornadasFiltradas(jornadas));
+  }, [jornadas, currentUser]);
+  useEffect(() => {
+    setMotoboysFiltrados(motoboys);
+  }, [motoboys]);
+  const handleLogin = (e) => {
+    e.preventDefault();
+    const user = colaboradores.find(
+      (c) => c.email === loginForm.email && c.senha === loginForm.senha && c.ativo
+    );
+    if (user) {
+      setCurrentUser(user);
+      setActiveTab("dashboard");
+      setLoginForm({ email: "", senha: "" });
+      toast.success(`Bem-vindo, ${user.nome}!`);
+    } else {
+      toast.error("Email ou senha incorretos!");
+    }
+  };
+  const handleLogout = () => {
     setCurrentUser(null);
     setActiveTab("dashboard");
   };
-  const hasPermission = (action) => {
-    if (!currentUser) return false;
-    const permissions = {
-      admin: {
-        viewDashboard: true,
-        manageMotoboys: true,
-        manageLojas: true,
-        manageJornadas: true,
-        manageAdiantamentos: true,
-        viewRelatorios: true,
-        manageColaboradores: true
-      },
-      financeiro: {
-        viewDashboard: true,
-        manageMotoboys: true,
-        manageLojas: false,
-        // Não pode criar/editar lojas
-        manageJornadas: true,
-        manageAdiantamentos: true,
-        viewRelatorios: true,
-        manageColaboradores: false
-      },
-      lojista: {
-        viewDashboard: true,
-        manageMotoboys: false,
-        manageLojas: false,
-        manageJornadas: true,
-        // Apenas para sua loja
-        manageAdiantamentos: true,
-        // Apenas para sua loja
-        viewRelatorios: true,
-        // Apenas para sua loja
-        manageColaboradores: false
-      }
-    };
-    return permissions[currentUser.tipo]?.[action] || false;
-  };
-  const canAccessLoja = (lojaId) => {
-    if (!currentUser) return false;
-    if (currentUser.tipo === "admin" || currentUser.tipo === "financeiro") return true;
-    if (currentUser.tipo === "lojista") return currentUser.lojaId === lojaId;
-    return false;
-  };
-  const formatCPF = (value) => {
-    if (!value) return "";
-    return value.replace(/\D/g, "").replace(/(\d{3})(\d)/, "$1.$2").replace(/(\d{3})(\d)/, "$1.$2").replace(/(\d{3})(\d{1,2})/, "$1-$2").replace(/(-\d{2})\d+?$/, "$1");
-  };
-  const formatCNPJ = (value) => {
-    if (!value) return "";
-    return value.replace(/\D/g, "").replace(/(\d{2})(\d)/, "$1.$2").replace(/(\d{3})(\d)/, "$1.$2").replace(/(\d{3})(\d)/, "$1/$2").replace(/(\d{4})(\d{1,2})/, "$1-$2").replace(/(-\d{2})\d+?$/, "$1");
-  };
-  const formatPhone = (value) => {
-    if (!value) return "";
-    return value.replace(/\D/g, "").replace(/(\d{2})(\d)/, "($1) $2").replace(/(\d{4})(\d)/, "$1-$2").replace(/(\d{4})-(\d)(\d{4})/, "$1$2-$3").replace(/(-\d{4})\d+?$/, "$1");
-  };
-  const formatDateBR = (dateString) => {
-    if (!dateString) return "";
-    const date = /* @__PURE__ */ new Date(dateString + "T00:00:00");
-    return date.toLocaleDateString("pt-BR");
-  };
-  const isDomingoOuFeriado = (data, eFeriado) => {
-    const dayOfWeek = new Date(data).getDay();
-    return dayOfWeek === 0 || eFeriado;
-  };
-  const calcularHorasTrabalhadas = (horaEntrada, horaSaida) => {
-    if (!horaEntrada || !horaSaida) return 0;
-    const [horaE, minutoE] = horaEntrada.split(":").map(Number);
-    const [horaS, minutoS] = horaSaida.split(":").map(Number);
-    let minutosEntrada = horaE * 60 + minutoE;
-    let minutosSaida = horaS * 60 + minutoS;
-    if (minutosSaida < minutosEntrada) {
-      minutosSaida += 24 * 60;
+  const addColaborador = async (e) => {
+    e.preventDefault();
+    if (!colaboradorForm.nome || !colaboradorForm.email || !colaboradorForm.senha) {
+      toast.error("Preencha todos os campos obrigat\xF3rios!");
+      return;
     }
-    const totalMinutos = minutosSaida - minutosEntrada;
-    return totalMinutos / 60;
+    const emailExistente = colaboradores.find(
+      (c) => c.email === colaboradorForm.email && (!editingColaborador || c.id !== editingColaborador.id)
+    );
+    if (emailExistente) {
+      toast.error("J\xE1 existe um colaborador com este email!");
+      return;
+    }
+    if (colaboradorForm.tipo === "lojista" && !colaboradorForm.lojaId) {
+      toast.error("Selecione uma loja para o colaborador lojista!");
+      return;
+    }
+    if (editingColaborador) {
+      const novosColaboradores = colaboradores.map(
+        (c) => c.id === editingColaborador.id ? {
+          ...c,
+          ...colaboradorForm,
+          lojaId: colaboradorForm.tipo === "lojista" ? colaboradorForm.lojaId : null
+        } : c
+      );
+      setColaboradores(novosColaboradores);
+      setEditingColaborador(null);
+      toast.success("Colaborador atualizado com sucesso!");
+    } else {
+      const novoColaborador = {
+        id: Date.now().toString(),
+        ...colaboradorForm,
+        lojaId: colaboradorForm.tipo === "lojista" ? colaboradorForm.lojaId : null,
+        ativo: true,
+        dataCriacao: (/* @__PURE__ */ new Date()).toISOString().split("T")[0]
+      };
+      const novosColaboradores = [...colaboradores, novoColaborador];
+      setColaboradores(novosColaboradores);
+      toast.success("Colaborador cadastrado com sucesso!");
+    }
+    setColaboradorForm({
+      nome: "",
+      email: "",
+      senha: "",
+      tipo: "lojista",
+      lojaId: ""
+    });
   };
-  const calcularValorJornada = (jornada) => {
-    if (!jornada) return 0;
-    const loja = lojas.find((l) => l.id === jornada.lojaId);
-    if (!loja) return 0;
-    const valorDiaria = Number(jornada.valorDiaria) || 0;
-    const corridasAte5km = Number(jornada.corridasAte5km) || 0;
-    const corridasAcima5km = Number(jornada.corridasAcima5km) || 0;
-    const valorCorridaAte5km = Number(loja.valorCorridaAte5km) || 0;
-    const valorCorridaAcima5km = Number(loja.valorCorridaAcima5km) || 0;
-    const valorCorridas = corridasAte5km * valorCorridaAte5km + corridasAcima5km * valorCorridaAcima5km;
-    const valorComissoes = Number(jornada.comissoes) || 0;
-    const valorMissoes = Number(jornada.missoes) || 0;
-    const valorTotal = valorDiaria + valorCorridas + valorComissoes + valorMissoes;
-    return isNaN(valorTotal) ? 0 : valorTotal;
+  const editColaborador = (colaborador) => {
+    setEditingColaborador(colaborador);
+    setColaboradorForm({
+      nome: colaborador.nome,
+      email: colaborador.email,
+      senha: colaborador.senha,
+      tipo: colaborador.tipo,
+      lojaId: colaborador.lojaId || ""
+    });
   };
-  const calcularCustosLoja = (jornadas2, loja) => {
-    if (!loja || jornadas2.length === 0) return {
-      valorLogistica: 0,
-      comissaoAdministrativa: 0,
-      taxaSupervisao: 0,
-      total: 0
-    };
-    const valorLogistica = jornadas2.reduce((sum, j) => sum + calcularValorJornada(j), 0);
-    const taxaAdministrativa = loja.taxaAdministrativa || 0;
-    const taxaSupervisao = jornadas2.length > 0 ? loja.taxaSupervisao || 0 : 0;
-    const total = valorLogistica + taxaAdministrativa + taxaSupervisao;
-    return {
-      valorLogistica,
-      comissaoAdministrativa: taxaAdministrativa,
-      taxaSupervisao,
-      total
-    };
+  const cancelarEdicaoColaborador = () => {
+    setEditingColaborador(null);
+    setColaboradorForm({
+      nome: "",
+      email: "",
+      senha: "",
+      tipo: "lojista",
+      lojaId: ""
+    });
   };
-  const getWeekRange = (dateString) => {
-    const date = new Date(dateString);
-    const weekStart = new Date(date);
-    weekStart.setDate(date.getDate() - date.getDay());
-    const weekEnd = new Date(weekStart);
-    weekEnd.setDate(weekStart.getDate() + 6);
-    return { weekStart, weekEnd };
-  };
-  const Modal = ({ isOpen, onClose, title, children }) => {
-    if (!isOpen) return null;
-    return /* @__PURE__ */ React.createElement("div", { className: "fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4" }, /* @__PURE__ */ React.createElement("div", { className: "bg-white rounded-lg p-6 w-full max-w-md max-h-screen overflow-y-auto" }, /* @__PURE__ */ React.createElement("div", { className: "flex justify-between items-center mb-4" }, /* @__PURE__ */ React.createElement("h3", { className: "text-lg font-semibold" }, title), /* @__PURE__ */ React.createElement(
+  const deleteColaborador = async (id) => {
+    if (id === currentUser?.id) {
+      toast.error("Voc\xEA n\xE3o pode excluir sua pr\xF3pria conta!");
+      return;
+    }
+    toast((t) => /* @__PURE__ */ React.createElement("div", { className: "flex flex-col items-center" }, /* @__PURE__ */ React.createElement("span", { className: "mb-3" }, "Tem certeza que deseja excluir este colaborador?"), /* @__PURE__ */ React.createElement("div", { className: "flex gap-2" }, /* @__PURE__ */ React.createElement(
       "button",
       {
-        onClick: onClose,
-        className: "text-gray-500 hover:text-gray-700 text-2xl leading-none"
+        onClick: () => {
+          const novosColaboradores = colaboradores.filter((c) => c.id !== id);
+          setColaboradores(novosColaboradores);
+          toast.dismiss(t.id);
+          toast.success("Colaborador exclu\xEDdo com sucesso!");
+        },
+        className: "bg-red-600 text-white px-3 py-1 rounded text-sm hover:bg-red-700"
       },
-      "\xD7"
-    )), children));
+      "Excluir"
+    ), /* @__PURE__ */ React.createElement(
+      "button",
+      {
+        onClick: () => toast.dismiss(t.id),
+        className: "bg-gray-600 text-white px-3 py-1 rounded text-sm hover:bg-gray-700"
+      },
+      "Cancelar"
+    ))), {
+      duration: 1e4
+    });
   };
-  const MotoboyModal = () => {
-    const [formData, setFormData] = useState({
+  const toggleColaboradorStatus = (id) => {
+    if (id === currentUser?.id) {
+      toast.error("Voc\xEA n\xE3o pode desativar sua pr\xF3pria conta!");
+      return;
+    }
+    const colaborador = colaboradores.find((c) => c.id === id);
+    const novosColaboradores = colaboradores.map(
+      (c) => c.id === id ? { ...c, ativo: !c.ativo } : c
+    );
+    setColaboradores(novosColaboradores);
+    toast.success(`Colaborador ${colaborador.ativo ? "desativado" : "ativado"} com sucesso!`);
+  };
+  const addMotoboy = async (e) => {
+    e.preventDefault();
+    if (!motoboyForm.nome || !motoboyForm.cpf || !motoboyForm.telefone) {
+      toast.error("Preencha todos os campos obrigat\xF3rios!");
+      return;
+    }
+    if (editingMotoboy) {
+      const novosMotoboys = motoboys.map(
+        (m) => m.id === editingMotoboy.id ? { ...m, ...motoboyForm } : m
+      );
+      setMotoboys(novosMotoboys);
+      setEditingMotoboy(null);
+      toast.success("Motoboy atualizado com sucesso!");
+    } else {
+      const novoMotoboy = {
+        id: Date.now().toString(),
+        ...motoboyForm
+      };
+      const novosMotoboys = [...motoboys, novoMotoboy];
+      setMotoboys(novosMotoboys);
+      toast.success("Motoboy cadastrado com sucesso!");
+    }
+    setMotoboyForm({
       nome: "",
       cpf: "",
       telefone: "",
       status: "ativo"
     });
-    useEffect(() => {
-      if (editingItem) {
-        setFormData({ ...editingItem });
-      } else {
-        setFormData({
-          nome: "",
-          cpf: "",
-          telefone: "",
-          status: "ativo"
-        });
-      }
-    }, [editingItem]);
-    const handleSubmit = (e) => {
-      e.preventDefault();
-      const newData = {
-        ...formData
-      };
-      if (editingItem) {
-        setMotoboys(motoboys.map((m) => m.id === editingItem.id ? { ...newData, id: editingItem.id } : m));
-      } else {
-        setMotoboys([...motoboys, { ...newData, id: Date.now().toString() }]);
-      }
-      setShowMotoboyModal(false);
-      setEditingItem(null);
-    };
-    const handleClose = () => {
-      setShowMotoboyModal(false);
-      setEditingItem(null);
-    };
-    return /* @__PURE__ */ React.createElement(Modal, { isOpen: showMotoboyModal, onClose: handleClose, title: "Cadastro de Motoboy" }, /* @__PURE__ */ React.createElement("form", { onSubmit: handleSubmit, className: "space-y-4" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("label", { className: "block text-sm font-medium mb-1" }, "Nome Completo"), /* @__PURE__ */ React.createElement(
-      "input",
-      {
-        type: "text",
-        value: formData.nome,
-        onChange: (e) => setFormData({ ...formData, nome: e.target.value }),
-        className: "w-full border rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500",
-        required: true
-      }
-    )), /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("label", { className: "block text-sm font-medium mb-1" }, "CPF"), /* @__PURE__ */ React.createElement(
-      "input",
-      {
-        type: "text",
-        value: formData.cpf,
-        onChange: (e) => setFormData({ ...formData, cpf: formatCPF(e.target.value) }),
-        className: "w-full border rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500",
-        maxLength: "14",
-        required: true
-      }
-    )), /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("label", { className: "block text-sm font-medium mb-1" }, "Telefone"), /* @__PURE__ */ React.createElement(
-      "input",
-      {
-        type: "text",
-        value: formData.telefone,
-        onChange: (e) => setFormData({ ...formData, telefone: formatPhone(e.target.value) }),
-        className: "w-full border rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500",
-        required: true
-      }
-    )), /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("label", { className: "block text-sm font-medium mb-1" }, "Status"), /* @__PURE__ */ React.createElement(
-      "select",
-      {
-        value: formData.status,
-        onChange: (e) => setFormData({ ...formData, status: e.target.value }),
-        className: "w-full border rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
-      },
-      /* @__PURE__ */ React.createElement("option", { value: "ativo" }, "Ativo"),
-      /* @__PURE__ */ React.createElement("option", { value: "inativo" }, "Inativo")
-    )), /* @__PURE__ */ React.createElement("div", { className: "flex gap-2" }, /* @__PURE__ */ React.createElement("button", { type: "submit", className: "flex-1 bg-blue-500 text-white py-2 rounded hover:bg-blue-600 transition-colors" }, editingItem ? "Atualizar" : "Cadastrar"), /* @__PURE__ */ React.createElement("button", { type: "button", onClick: handleClose, className: "flex-1 bg-gray-300 py-2 rounded hover:bg-gray-400 transition-colors" }, "Cancelar"))));
   };
-  const LojaModal = () => {
-    const [formData, setFormData] = useState({
+  const addLoja = async (e) => {
+    e.preventDefault();
+    if (!lojaForm.nome || !lojaForm.cnpj || !lojaForm.contato) {
+      toast.error("Preencha todos os campos obrigat\xF3rios!");
+      return;
+    }
+    if (editingLoja) {
+      const novasLojas = lojas.map(
+        (l) => l.id === editingLoja.id ? { ...l, ...lojaForm } : l
+      );
+      setLojas(novasLojas);
+      setEditingLoja(null);
+      toast.success("Loja atualizada com sucesso!");
+    } else {
+      const novaLoja = {
+        id: Date.now().toString(),
+        ...lojaForm
+      };
+      const novasLojas = [...lojas, novaLoja];
+      setLojas(novasLojas);
+      toast.success("Loja cadastrada com sucesso!");
+    }
+    setLojaForm({
       nome: "",
       cnpj: "",
       contato: "",
+      valorHoraSegSab: 12,
+      valorHoraDomFeriado: 13.33,
       valorCorridaAte5km: 5,
       valorCorridaAcima5km: 8,
       taxaAdministrativa: 350,
-      taxaSupervisao: 50
+      taxaSupervisao: 50,
+      limiteValorFixo: 1e3,
+      percentualTaxa: 10,
+      usarTaxaPercentual: false
     });
-    useEffect(() => {
-      if (editingItem) {
-        setFormData({ ...editingItem });
-      } else {
-        setFormData({
-          nome: "",
-          cnpj: "",
-          contato: "",
-          valorCorridaAte5km: 5,
-          valorCorridaAcima5km: 8,
-          taxaAdministrativa: 350,
-          taxaSupervisao: 50
-        });
-      }
-    }, [editingItem]);
-    const handleSubmit = (e) => {
-      e.preventDefault();
-      const newData = {
-        ...formData,
-        valorCorridaAte5km: Number(formData.valorCorridaAte5km),
-        valorCorridaAcima5km: Number(formData.valorCorridaAcima5km),
-        taxaAdministrativa: Number(formData.taxaAdministrativa),
-        taxaSupervisao: Number(formData.taxaSupervisao)
-      };
-      if (editingItem) {
-        setLojas(lojas.map((l) => l.id === editingItem.id ? { ...newData, id: editingItem.id } : l));
-      } else {
-        setLojas([...lojas, { ...newData, id: Date.now().toString() }]);
-      }
-      setShowLojaModal(false);
-      setEditingItem(null);
-    };
-    const handleClose = () => {
-      setShowLojaModal(false);
-      setEditingItem(null);
-    };
-    return /* @__PURE__ */ React.createElement(Modal, { isOpen: showLojaModal, onClose: handleClose, title: "Cadastro de Loja" }, /* @__PURE__ */ React.createElement("form", { onSubmit: handleSubmit, className: "space-y-4" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("label", { className: "block text-sm font-medium mb-1" }, "Nome da Loja"), /* @__PURE__ */ React.createElement(
-      "input",
-      {
-        type: "text",
-        value: formData.nome,
-        onChange: (e) => setFormData({ ...formData, nome: e.target.value }),
-        className: "w-full border rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500",
-        required: true
-      }
-    )), /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("label", { className: "block text-sm font-medium mb-1" }, "CNPJ"), /* @__PURE__ */ React.createElement(
-      "input",
-      {
-        type: "text",
-        value: formData.cnpj,
-        onChange: (e) => setFormData({ ...formData, cnpj: formatCNPJ(e.target.value) }),
-        className: "w-full border rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500",
-        maxLength: "18",
-        required: true
-      }
-    )), /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("label", { className: "block text-sm font-medium mb-1" }, "Contato"), /* @__PURE__ */ React.createElement(
-      "input",
-      {
-        type: "text",
-        value: formData.contato,
-        onChange: (e) => setFormData({ ...formData, contato: formatPhone(e.target.value) }),
-        className: "w-full border rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500",
-        required: true
-      }
-    )), /* @__PURE__ */ React.createElement("div", { className: "grid grid-cols-2 gap-2" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("label", { className: "block text-sm font-medium mb-1" }, "Valor Corrida at\xE9 5km (R$)"), /* @__PURE__ */ React.createElement(
-      "input",
-      {
-        type: "number",
-        step: "0.01",
-        value: formData.valorCorridaAte5km,
-        onChange: (e) => setFormData({ ...formData, valorCorridaAte5km: e.target.value }),
-        className: "w-full border rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500",
-        required: true
-      }
-    )), /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("label", { className: "block text-sm font-medium mb-1" }, "Valor Corrida acima de 5km (R$)"), /* @__PURE__ */ React.createElement(
-      "input",
-      {
-        type: "number",
-        step: "0.01",
-        value: formData.valorCorridaAcima5km,
-        onChange: (e) => setFormData({ ...formData, valorCorridaAcima5km: e.target.value }),
-        className: "w-full border rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500",
-        required: true
-      }
-    ))), /* @__PURE__ */ React.createElement("div", { className: "grid grid-cols-2 gap-2" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("label", { className: "block text-sm font-medium mb-1" }, "Taxa Administrativa (R$)"), /* @__PURE__ */ React.createElement(
-      "input",
-      {
-        type: "number",
-        step: "0.01",
-        value: formData.taxaAdministrativa,
-        onChange: (e) => setFormData({ ...formData, taxaAdministrativa: e.target.value }),
-        className: "w-full border rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500",
-        required: true
-      }
-    )), /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("label", { className: "block text-sm font-medium mb-1" }, "Taxa Supervis\xE3o (R$)"), /* @__PURE__ */ React.createElement(
-      "input",
-      {
-        type: "number",
-        step: "0.01",
-        value: formData.taxaSupervisao,
-        onChange: (e) => setFormData({ ...formData, taxaSupervisao: e.target.value }),
-        className: "w-full border rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500",
-        required: true
-      }
-    ))), /* @__PURE__ */ React.createElement("div", { className: "flex gap-2" }, /* @__PURE__ */ React.createElement("button", { type: "submit", className: "flex-1 bg-blue-500 text-white py-2 rounded hover:bg-blue-600 transition-colors" }, editingItem ? "Atualizar" : "Cadastrar"), /* @__PURE__ */ React.createElement("button", { type: "button", onClick: handleClose, className: "flex-1 bg-gray-300 py-2 rounded hover:bg-gray-400 transition-colors" }, "Cancelar"))));
   };
-  const JornadaModal = () => {
-    const [formData, setFormData] = useState({
+  const formatarDataParaSalvar = (dataInput) => {
+    if (!dataInput) return "";
+    console.log("\u{1F4C5} formatarDataParaSalvar - Input recebido:", dataInput);
+    console.log("\u{1F4C5} Tipo do input:", typeof dataInput);
+    if (typeof dataInput === "string" && /^\d{4}-\d{2}-\d{2}$/.test(dataInput)) {
+      console.log("\u{1F4C5} Data j\xE1 no formato correto:", dataInput);
+      return dataInput;
+    }
+    try {
+      const data = new Date(dataInput);
+      console.log("\u{1F4C5} Data convertida para objeto:", data);
+      if (isNaN(data.getTime())) {
+        console.error("\u{1F4C5} Data inv\xE1lida:", dataInput);
+        return "";
+      }
+      const ano = data.getFullYear();
+      const mes = String(data.getMonth() + 1).padStart(2, "0");
+      const dia = String(data.getDate()).padStart(2, "0");
+      const resultado = `${ano}-${mes}-${dia}`;
+      console.log("\u{1F4C5} Data formatada final:", resultado);
+      return resultado;
+    } catch (error) {
+      console.error("\u{1F4C5} Erro ao formatar data:", error);
+      return dataInput;
+    }
+  };
+  const adicionarMotoboyMultiplo = () => {
+    const motoboysSelecionados = jornadaMultiplaForm.motoboys.map((m) => m.motoboyId);
+    const motoboyDisponivel = motoboys.filter(
+      (m) => m.status === "ativo" && !motoboysSelecionados.includes(m.id)
+    )[0];
+    if (!motoboyDisponivel) {
+      toast.warning("Todos os motoboys ativos j\xE1 foram adicionados!");
+      return;
+    }
+    const novoMotoboy = {
+      motoboyId: motoboyDisponivel.id,
+      valorDiaria: 120,
+      valorCorridas: 0,
+      comissoes: 0,
+      missoes: 0,
+      descontos: 0,
+      observacoes: ""
+    };
+    setJornadaMultiplaForm({
+      ...jornadaMultiplaForm,
+      motoboys: [...jornadaMultiplaForm.motoboys, novoMotoboy]
+    });
+  };
+  const removerMotoboyMultiplo = (index) => {
+    const novosMotoboys = jornadaMultiplaForm.motoboys.filter((_, i) => i !== index);
+    setJornadaMultiplaForm({
+      ...jornadaMultiplaForm,
+      motoboys: novosMotoboys
+    });
+  };
+  const atualizarMotoboyMultiplo = (index, campo, valor) => {
+    const novosMotoboys = [...jornadaMultiplaForm.motoboys];
+    novosMotoboys[index] = {
+      ...novosMotoboys[index],
+      [campo]: campo.includes("valor") || campo.includes("comissoes") || campo.includes("missoes") || campo.includes("descontos") ? parseFloat(valor) || 0 : valor
+    };
+    setJornadaMultiplaForm({
+      ...jornadaMultiplaForm,
+      motoboys: novosMotoboys
+    });
+  };
+  const addJornada = async (e) => {
+    e.preventDefault();
+    if (currentUser?.tipo === "lojista" && currentUser?.lojaId) {
+      if (cadastroMultiplo) {
+        jornadaMultiplaForm.lojaId = currentUser.lojaId;
+      } else {
+        jornadaForm.lojaId = currentUser.lojaId;
+      }
+    }
+    if (cadastroMultiplo) {
+      if (!jornadaMultiplaForm.data || !jornadaMultiplaForm.lojaId || jornadaMultiplaForm.motoboys.length === 0) {
+        toast.error("Preencha todos os campos obrigat\xF3rios! (Data, Loja e pelo menos um Motoboy)");
+        return;
+      }
+    } else {
+      if (!jornadaForm.data || !jornadaForm.motoboyId || !jornadaForm.lojaId) {
+        toast.error("Preencha todos os campos obrigat\xF3rios!");
+        return;
+      }
+    }
+    if (editingJornada) {
+      const dataCorrigida = formatarDataParaSalvar(jornadaForm.data);
+      const novasJornadas = jornadas.map(
+        (j) => j.id === editingJornada.id ? { ...j, ...jornadaForm, data: dataCorrigida } : j
+      );
+      setJornadas(novasJornadas);
+      aplicarFiltros(novasJornadas);
+      toast.success("Jornada atualizada com sucesso!");
+    } else {
+      let novasJornadas = [...jornadas];
+      let jornadasCriadas = 0;
+      let jornadasExistentes = 0;
+      if (cadastroMultiplo) {
+        const dataCorrigida = formatarDataParaSalvar(jornadaMultiplaForm.data);
+        jornadaMultiplaForm.motoboys.forEach((motoboyData) => {
+          if (jornadas.find((j) => j.motoboyId === motoboyData.motoboyId && j.data === dataCorrigida)) {
+            jornadasExistentes++;
+            return;
+          }
+          const novaJornada = {
+            id: `${Date.now()}-${motoboyData.motoboyId}-${Math.random()}`,
+            data: dataCorrigida,
+            motoboyId: motoboyData.motoboyId,
+            lojaId: jornadaMultiplaForm.lojaId,
+            valorDiaria: parseFloat(motoboyData.valorDiaria) || 0,
+            valorCorridas: parseFloat(motoboyData.valorCorridas) || 0,
+            comissoes: parseFloat(motoboyData.comissoes) || 0,
+            missoes: parseFloat(motoboyData.missoes) || 0,
+            descontos: parseFloat(motoboyData.descontos) || 0,
+            eFeriado: jornadaMultiplaForm.eFeriado,
+            observacoes: motoboyData.observacoes || ""
+          };
+          novasJornadas.push(novaJornada);
+          jornadasCriadas++;
+        });
+        if (jornadasCriadas > 0) {
+          toast.success(`${jornadasCriadas} jornada(s) cadastrada(s) com sucesso!${jornadasExistentes > 0 ? ` ${jornadasExistentes} motoboy(s) j\xE1 possu\xEDam jornada nesta data.` : ""}`, {
+            duration: 5e3
+          });
+        } else {
+          toast.error("Nenhuma jornada foi criada. Todos os motoboys j\xE1 possuem jornada nesta data.");
+          return;
+        }
+      } else {
+        const dataCorrigida = formatarDataParaSalvar(jornadaForm.data);
+        if (jornadas.find((j) => j.motoboyId === jornadaForm.motoboyId && j.data === dataCorrigida)) {
+          toast.error("J\xE1 existe uma jornada para este motoboy nesta data!");
+          return;
+        }
+        const novaJornada = {
+          id: Date.now().toString(),
+          ...jornadaForm,
+          data: dataCorrigida,
+          valorDiaria: parseFloat(jornadaForm.valorDiaria) || 0,
+          valorCorridas: parseFloat(jornadaForm.valorCorridas) || 0,
+          comissoes: parseFloat(jornadaForm.comissoes) || 0,
+          missoes: parseFloat(jornadaForm.missoes) || 0,
+          descontos: parseFloat(jornadaForm.descontos) || 0
+        };
+        novasJornadas.push(novaJornada);
+        toast.success("Jornada cadastrada com sucesso!");
+      }
+      setJornadas(novasJornadas);
+      aplicarFiltros(novasJornadas);
+    }
+    setJornadaForm({
       data: "",
       motoboyId: "",
       lojaId: "",
-      horasEntrada: "",
-      horasSaida: "",
       valorDiaria: 120,
-      corridasAte5km: 0,
-      corridasAcima5km: 0,
+      valorCorridas: 0,
       comissoes: 0,
       missoes: 0,
+      descontos: 0,
       eFeriado: false,
       observacoes: ""
     });
-    useEffect(() => {
-      if (editingItem) {
-        setFormData({ ...editingItem });
-      } else {
-        const initialLojaId = currentUser?.tipo === "lojista" ? currentUser.lojaId : "";
-        setFormData({
-          data: "",
-          motoboyId: "",
-          lojaId: initialLojaId,
-          horasEntrada: "",
-          horasSaida: "",
-          valorDiaria: 120,
-          corridasAte5km: 0,
-          corridasAcima5km: 0,
-          comissoes: 0,
-          missoes: 0,
-          eFeriado: false,
-          observacoes: ""
-        });
-      }
-    }, [editingItem, currentUser]);
-    const handleSubmit = (e) => {
-      e.preventDefault();
-      const newData = {
-        ...formData,
-        valorDiaria: Number(formData.valorDiaria),
-        corridasAte5km: Number(formData.corridasAte5km),
-        corridasAcima5km: Number(formData.corridasAcima5km),
-        comissoes: Number(formData.comissoes),
-        missoes: Number(formData.missoes)
-      };
-      if (editingItem) {
-        setJornadas(jornadas.map((j) => j.id === editingItem.id ? { ...newData, id: editingItem.id } : j));
-      } else {
-        setJornadas([...jornadas, { ...newData, id: Date.now().toString() }]);
-      }
-      setShowJornadaModal(false);
-      setEditingItem(null);
-    };
-    const handleClose = () => {
-      setShowJornadaModal(false);
-      setEditingItem(null);
-    };
-    return /* @__PURE__ */ React.createElement(Modal, { isOpen: showJornadaModal, onClose: handleClose, title: "Registro de Jornada" }, /* @__PURE__ */ React.createElement("form", { onSubmit: handleSubmit, className: "space-y-4" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("label", { className: "block text-sm font-medium mb-1" }, "Data"), /* @__PURE__ */ React.createElement(
-      "input",
-      {
-        type: "date",
-        value: formData.data,
-        onChange: (e) => setFormData({ ...formData, data: e.target.value }),
-        className: "w-full border rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500",
-        required: true
-      }
-    )), /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("label", { className: "block text-sm font-medium mb-1" }, "Motoboy"), /* @__PURE__ */ React.createElement(
-      "select",
-      {
-        value: formData.motoboyId,
-        onChange: (e) => setFormData({ ...formData, motoboyId: e.target.value }),
-        className: "w-full border rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500",
-        required: true
-      },
-      /* @__PURE__ */ React.createElement("option", { value: "" }, "Selecione um motoboy"),
-      motoboys.filter((m) => m.status === "ativo").map((motoboy) => /* @__PURE__ */ React.createElement("option", { key: motoboy.id, value: motoboy.id }, motoboy.nome))
-    )), /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("label", { className: "block text-sm font-medium mb-1" }, "Loja"), /* @__PURE__ */ React.createElement(
-      "select",
-      {
-        value: formData.lojaId,
-        onChange: (e) => setFormData({ ...formData, lojaId: e.target.value }),
-        className: "w-full border rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500",
-        required: true,
-        disabled: currentUser?.tipo === "lojista"
-      },
-      /* @__PURE__ */ React.createElement("option", { value: "" }, "Selecione uma loja"),
-      lojas.filter((loja) => canAccessLoja(loja.id)).map((loja) => /* @__PURE__ */ React.createElement("option", { key: loja.id, value: loja.id }, loja.nome))
-    )), /* @__PURE__ */ React.createElement("div", { className: "grid grid-cols-2 gap-2" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("label", { className: "block text-sm font-medium mb-1" }, "Hora Entrada"), /* @__PURE__ */ React.createElement(
-      "input",
-      {
-        type: "time",
-        value: formData.horasEntrada,
-        onChange: (e) => setFormData({ ...formData, horasEntrada: e.target.value }),
-        className: "w-full border rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500",
-        required: true
-      }
-    )), /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("label", { className: "block text-sm font-medium mb-1" }, "Hora Sa\xEDda"), /* @__PURE__ */ React.createElement(
-      "input",
-      {
-        type: "time",
-        value: formData.horasSaida,
-        onChange: (e) => setFormData({ ...formData, horasSaida: e.target.value }),
-        className: "w-full border rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500",
-        required: true
-      }
-    ))), /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("label", { className: "block text-sm font-medium mb-1" }, "Valor da Di\xE1ria (R$)"), /* @__PURE__ */ React.createElement(
-      "input",
-      {
-        type: "number",
-        step: "0.01",
-        value: formData.valorDiaria,
-        onChange: (e) => setFormData({ ...formData, valorDiaria: e.target.value }),
-        className: "w-full border rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500",
-        required: true,
-        min: "0"
-      }
-    )), /* @__PURE__ */ React.createElement("div", { className: "grid grid-cols-2 gap-2" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("label", { className: "block text-sm font-medium mb-1" }, "Corridas at\xE9 5km"), /* @__PURE__ */ React.createElement(
-      "input",
-      {
-        type: "number",
-        value: formData.corridasAte5km,
-        onChange: (e) => setFormData({ ...formData, corridasAte5km: e.target.value }),
-        className: "w-full border rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500",
-        min: "0",
-        required: true
-      }
-    )), /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("label", { className: "block text-sm font-medium mb-1" }, "Corridas acima de 5km"), /* @__PURE__ */ React.createElement(
-      "input",
-      {
-        type: "number",
-        value: formData.corridasAcima5km,
-        onChange: (e) => setFormData({ ...formData, corridasAcima5km: e.target.value }),
-        className: "w-full border rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500",
-        min: "0",
-        required: true
-      }
-    ))), /* @__PURE__ */ React.createElement("div", { className: "grid grid-cols-2 gap-2" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("label", { className: "block text-sm font-medium mb-1" }, "Comiss\xF5es (R$)"), /* @__PURE__ */ React.createElement(
-      "input",
-      {
-        type: "number",
-        step: "0.01",
-        value: formData.comissoes,
-        onChange: (e) => setFormData({ ...formData, comissoes: e.target.value }),
-        className: "w-full border rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500",
-        min: "0"
-      }
-    )), /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("label", { className: "block text-sm font-medium mb-1" }, "Miss\xF5es (R$)"), /* @__PURE__ */ React.createElement(
-      "input",
-      {
-        type: "number",
-        step: "0.01",
-        value: formData.missoes,
-        onChange: (e) => setFormData({ ...formData, missoes: e.target.value }),
-        className: "w-full border rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500",
-        min: "0"
-      }
-    ))), /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("label", { className: "flex items-center" }, /* @__PURE__ */ React.createElement(
-      "input",
-      {
-        type: "checkbox",
-        checked: formData.eFeriado,
-        onChange: (e) => setFormData({ ...formData, eFeriado: e.target.checked }),
-        className: "mr-2"
-      }
-    ), "\xC9 feriado?")), /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("label", { className: "block text-sm font-medium mb-1" }, "Observa\xE7\xF5es"), /* @__PURE__ */ React.createElement(
-      "textarea",
-      {
-        value: formData.observacoes,
-        onChange: (e) => setFormData({ ...formData, observacoes: e.target.value }),
-        className: "w-full border rounded px-3 py-2 h-20 focus:outline-none focus:ring-2 focus:ring-blue-500"
-      }
-    )), /* @__PURE__ */ React.createElement("div", { className: "flex gap-2" }, /* @__PURE__ */ React.createElement("button", { type: "submit", className: "flex-1 bg-blue-500 text-white py-2 rounded hover:bg-blue-600 transition-colors" }, editingItem ? "Atualizar" : "Registrar"), /* @__PURE__ */ React.createElement("button", { type: "button", onClick: handleClose, className: "flex-1 bg-gray-300 py-2 rounded hover:bg-gray-400 transition-colors" }, "Cancelar"))));
-  };
-  const ColaboradorModal = () => {
-    const [formData, setFormData] = useState({
-      nome: "",
-      email: "",
-      senha: "",
-      tipo: "lojista",
+    setJornadaMultiplaForm({
+      data: "",
       lojaId: "",
-      ativo: true
+      eFeriado: false,
+      motoboys: []
     });
-    useEffect(() => {
-      if (editingItem) {
-        setFormData({ ...editingItem });
-      } else {
-        setFormData({
-          nome: "",
-          email: "",
-          senha: "",
-          tipo: "lojista",
-          lojaId: "",
-          ativo: true
-        });
-      }
-    }, [editingItem]);
-    const handleSubmit = (e) => {
-      e.preventDefault();
-      const emailExists = colaboradores.some(
-        (c) => c.email === formData.email && (!editingItem || c.id !== editingItem.id)
-      );
-      if (emailExists) {
-        alert("Este email j\xE1 est\xE1 cadastrado!");
-        return;
-      }
-      const newData = {
-        ...formData,
-        lojaId: formData.tipo === "lojista" ? formData.lojaId : null
-      };
-      if (editingItem) {
-        setColaboradores(colaboradores.map(
-          (c) => c.id === editingItem.id ? { ...newData, id: editingItem.id } : c
-        ));
-      } else {
-        setColaboradores([...colaboradores, {
-          ...newData,
-          id: Date.now().toString(),
-          dataCriacao: (/* @__PURE__ */ new Date()).toISOString().split("T")[0]
-        }]);
-      }
-      setShowColaboradorModal(false);
-      setEditingItem(null);
-    };
-    const handleClose = () => {
-      setShowColaboradorModal(false);
-      setEditingItem(null);
-    };
-    return /* @__PURE__ */ React.createElement(Modal, { isOpen: showColaboradorModal, onClose: handleClose, title: "Cadastro de Colaborador" }, /* @__PURE__ */ React.createElement("form", { onSubmit: handleSubmit, className: "space-y-4" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("label", { className: "block text-sm font-medium mb-1" }, "Nome Completo"), /* @__PURE__ */ React.createElement(
-      "input",
-      {
-        type: "text",
-        value: formData.nome,
-        onChange: (e) => setFormData({ ...formData, nome: e.target.value }),
-        className: "w-full border rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500",
-        required: true
-      }
-    )), /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("label", { className: "block text-sm font-medium mb-1" }, "Email"), /* @__PURE__ */ React.createElement(
-      "input",
-      {
-        type: "email",
-        value: formData.email,
-        onChange: (e) => setFormData({ ...formData, email: e.target.value }),
-        className: "w-full border rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500",
-        required: true
-      }
-    )), /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("label", { className: "block text-sm font-medium mb-1" }, "Senha"), /* @__PURE__ */ React.createElement(
-      "input",
-      {
-        type: "password",
-        value: formData.senha,
-        onChange: (e) => setFormData({ ...formData, senha: e.target.value }),
-        className: "w-full border rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500",
-        required: true,
-        minLength: "6"
-      }
-    )), /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("label", { className: "block text-sm font-medium mb-1" }, "Tipo de Usu\xE1rio"), /* @__PURE__ */ React.createElement(
-      "select",
-      {
-        value: formData.tipo,
-        onChange: (e) => setFormData({ ...formData, tipo: e.target.value, lojaId: "" }),
-        className: "w-full border rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500",
-        required: true
-      },
-      /* @__PURE__ */ React.createElement("option", { value: "lojista" }, "Lojista"),
-      /* @__PURE__ */ React.createElement("option", { value: "financeiro" }, "Financeiro"),
-      /* @__PURE__ */ React.createElement("option", { value: "admin" }, "Administrador")
-    )), formData.tipo === "lojista" && /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("label", { className: "block text-sm font-medium mb-1" }, "Loja"), /* @__PURE__ */ React.createElement(
-      "select",
-      {
-        value: formData.lojaId,
-        onChange: (e) => setFormData({ ...formData, lojaId: e.target.value }),
-        className: "w-full border rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500",
-        required: true
-      },
-      /* @__PURE__ */ React.createElement("option", { value: "" }, "Selecione uma loja"),
-      lojas.map((loja) => /* @__PURE__ */ React.createElement("option", { key: loja.id, value: loja.id }, loja.nome))
-    )), /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("label", { className: "flex items-center" }, /* @__PURE__ */ React.createElement(
-      "input",
-      {
-        type: "checkbox",
-        checked: formData.ativo,
-        onChange: (e) => setFormData({ ...formData, ativo: e.target.checked }),
-        className: "mr-2"
-      }
-    ), "Usu\xE1rio Ativo")), /* @__PURE__ */ React.createElement("div", { className: "flex gap-2" }, /* @__PURE__ */ React.createElement("button", { type: "submit", className: "flex-1 bg-blue-500 text-white py-2 rounded hover:bg-blue-600 transition-colors" }, editingItem ? "Atualizar" : "Cadastrar"), /* @__PURE__ */ React.createElement("button", { type: "button", onClick: handleClose, className: "flex-1 bg-gray-300 py-2 rounded hover:bg-gray-400 transition-colors" }, "Cancelar"))));
+    setShowJornadaForm(false);
+    setEditingJornada(null);
+    setCadastroMultiplo(false);
   };
-  const LoginScreen = () => {
-    const [loginData, setLoginData] = useState({ email: "", senha: "" });
-    const [error, setError] = useState("");
-    const handleLogin = (e) => {
-      e.preventDefault();
-      setError("");
-      if (login(loginData.email, loginData.senha)) {
-        setLoginData({ email: "", senha: "" });
-      } else {
-        setError("Email ou senha incorretos, ou usu\xE1rio inativo.");
-      }
+  const addAdiantamento = async (e) => {
+    e.preventDefault();
+    if (!adiantamentoForm.motoboyId || !adiantamentoForm.lojaId || !adiantamentoForm.valor || !adiantamentoForm.data) {
+      toast.error("Preencha todos os campos obrigat\xF3rios!");
+      return;
+    }
+    const novoAdiantamento = {
+      id: Date.now().toString(),
+      ...adiantamentoForm
     };
-    return /* @__PURE__ */ React.createElement("div", { className: "min-h-screen bg-gray-100 flex items-center justify-center" }, /* @__PURE__ */ React.createElement("div", { className: "bg-white p-8 rounded-lg shadow-md w-full max-w-md" }, /* @__PURE__ */ React.createElement("div", { className: "text-center mb-8" }, /* @__PURE__ */ React.createElement(
-      "img",
-      {
-        src: "assets/JeFG5upo7Hg6wrzGnryGF.jpeg",
-        alt: "Expresso Neves",
-        className: "h-16 w-auto mx-auto mb-4"
-      }
-    ), /* @__PURE__ */ React.createElement("h1", { className: "text-2xl font-bold text-gray-900" }, "Expresso Neves"), /* @__PURE__ */ React.createElement("p", { className: "text-gray-600" }, "Sistema de Gest\xE3o de Motoboys")), /* @__PURE__ */ React.createElement("form", { onSubmit: handleLogin, className: "space-y-4" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("label", { className: "block text-sm font-medium mb-1" }, "Email"), /* @__PURE__ */ React.createElement(
-      "input",
-      {
-        type: "email",
-        value: loginData.email,
-        onChange: (e) => setLoginData({ ...loginData, email: e.target.value }),
-        className: "w-full border rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500",
-        placeholder: "seu@email.com",
-        required: true
-      }
-    )), /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("label", { className: "block text-sm font-medium mb-1" }, "Senha"), /* @__PURE__ */ React.createElement(
-      "input",
-      {
-        type: "password",
-        value: loginData.senha,
-        onChange: (e) => setLoginData({ ...loginData, senha: e.target.value }),
-        className: "w-full border rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500",
-        placeholder: "********",
-        required: true
-      }
-    )), error && /* @__PURE__ */ React.createElement("div", { className: "text-red-600 text-sm bg-red-50 p-2 rounded" }, error), /* @__PURE__ */ React.createElement(
-      "button",
-      {
-        type: "submit",
-        className: "w-full bg-blue-500 text-white py-2 rounded hover:bg-blue-600 transition-colors"
-      },
-      "Entrar"
-    )), /* @__PURE__ */ React.createElement("div", { className: "mt-6 text-center text-sm text-gray-500" }, /* @__PURE__ */ React.createElement("p", null, "Usu\xE1rio de teste:"), /* @__PURE__ */ React.createElement("p", null, "Email: ", /* @__PURE__ */ React.createElement("strong", null, "admin@expressoneves.com")), /* @__PURE__ */ React.createElement("p", null, "Senha: ", /* @__PURE__ */ React.createElement("strong", null, "admin123")))));
-  };
-  const AdiantamentoModal = () => {
-    const [formData, setFormData] = useState({
+    const novosAdiantamentos = [...adiantamentos, novoAdiantamento];
+    setAdiantamentos(novosAdiantamentos);
+    setAdiantamentoForm({
       motoboyId: "",
       lojaId: "",
       valor: 0,
       data: "",
       observacao: ""
     });
-    useEffect(() => {
-      if (editingItem) {
-        setFormData({ ...editingItem });
-      } else {
-        const initialLojaId = currentUser?.tipo === "lojista" ? currentUser.lojaId : "";
-        setFormData({
-          motoboyId: "",
-          lojaId: initialLojaId,
-          valor: 0,
-          data: "",
-          observacao: ""
-        });
-      }
-    }, [editingItem, currentUser]);
-    const handleSubmit = (e) => {
-      e.preventDefault();
-      const newData = {
-        ...formData,
-        valor: Number(formData.valor)
+    toast.success("Adiantamento cadastrado com sucesso!");
+  };
+  const addDebito = async (e) => {
+    e.preventDefault();
+    if (!debitoForm.lojaId || !debitoForm.descricao || !debitoForm.valor || !debitoForm.dataVencimento) {
+      toast.error("Preencha todos os campos obrigat\xF3rios!");
+      return;
+    }
+    if (editingDebito) {
+      const novosDebitos = debitosPendentes.map(
+        (d) => d.id === editingDebito.id ? { ...d, ...debitoForm } : d
+      );
+      setDebitosPendentes(novosDebitos);
+      setEditingDebito(null);
+      toast.success("D\xE9bito atualizado com sucesso!");
+    } else {
+      const novoDebito = {
+        id: Date.now().toString(),
+        ...debitoForm,
+        dataCriacao: (/* @__PURE__ */ new Date()).toISOString().split("T")[0]
       };
-      if (editingItem) {
-        setAdiantamentos(adiantamentos.map((a) => a.id === editingItem.id ? { ...newData, id: editingItem.id } : a));
-      } else {
-        setAdiantamentos([...adiantamentos, { ...newData, id: Date.now().toString() }]);
+      const novosDebitos = [...debitosPendentes, novoDebito];
+      setDebitosPendentes(novosDebitos);
+      toast.success("D\xE9bito cadastrado com sucesso!");
+    }
+    setDebitoForm({
+      lojaId: "",
+      descricao: "",
+      valor: 0,
+      dataVencimento: "",
+      status: "pendente"
+    });
+  };
+  const editDebito = (debito) => {
+    setEditingDebito(debito);
+    setDebitoForm({
+      lojaId: debito.lojaId,
+      descricao: debito.descricao,
+      valor: debito.valor,
+      dataVencimento: debito.dataVencimento,
+      status: debito.status
+    });
+  };
+  const cancelarEdicaoDebito = () => {
+    setEditingDebito(null);
+    setDebitoForm({
+      lojaId: "",
+      descricao: "",
+      valor: 0,
+      dataVencimento: "",
+      status: "pendente"
+    });
+  };
+  const exportarDebitosPDF = () => {
+    if (debitosPendentes.length === 0) {
+      toast.error("Nenhum d\xE9bito dispon\xEDvel para exportar!");
+      return;
+    }
+    const doc = new jsPDF();
+    const pageHeight = doc.internal.pageSize.height;
+    let yPos = 20;
+    const addNewPage = () => {
+      doc.addPage();
+      yPos = 20;
+    };
+    const checkNewPage = (requiredHeight) => {
+      if (yPos + requiredHeight > pageHeight - 20) {
+        addNewPage();
       }
-      setShowAdiantamentoModal(false);
-      setEditingItem(null);
     };
-    const handleClose = () => {
-      setShowAdiantamentoModal(false);
-      setEditingItem(null);
+    doc.setFontSize(16);
+    doc.text("RELAT\xD3RIO DE D\xC9BITOS PENDENTES - EXPRESSO NEVES", 20, yPos);
+    yPos += 10;
+    doc.setFontSize(10);
+    doc.text(`Gerado em: ${(/* @__PURE__ */ new Date()).toLocaleString("pt-BR")}`, 20, yPos);
+    yPos += 15;
+    const debitosPendentesAtivos = debitosPendentes.filter((d) => d.status === "pendente");
+    const debitosPagos = debitosPendentes.filter((d) => d.status === "pago");
+    const debitosVencidos = debitosPendentesAtivos.filter((d) => new Date(d.dataVencimento) < /* @__PURE__ */ new Date());
+    doc.setFontSize(12);
+    doc.text("RESUMO GERAL:", 20, yPos);
+    yPos += 8;
+    doc.setFontSize(10);
+    doc.text(`Total de d\xE9bitos: ${debitosPendentes.length}`, 20, yPos);
+    yPos += 6;
+    doc.text(`D\xE9bitos pendentes: ${debitosPendentesAtivos.length}`, 20, yPos);
+    yPos += 6;
+    doc.text(`D\xE9bitos vencidos: ${debitosVencidos.length}`, 20, yPos);
+    yPos += 6;
+    doc.text(`D\xE9bitos pagos: ${debitosPagos.length}`, 20, yPos);
+    yPos += 6;
+    doc.text(`Valor total pendente: R$ ${debitosPendentesAtivos.reduce((sum, d) => sum + d.valor, 0).toFixed(2)}`, 20, yPos);
+    yPos += 6;
+    doc.text(`Valor total vencido: R$ ${debitosVencidos.reduce((sum, d) => sum + d.valor, 0).toFixed(2)}`, 20, yPos);
+    yPos += 20;
+    const debitosPorLoja = {};
+    debitosPendentes.forEach((debito) => {
+      const loja = lojas.find((l) => l.id === debito.lojaId);
+      const nomeLoja = loja ? loja.nome : "Loja n\xE3o encontrada";
+      if (!debitosPorLoja[nomeLoja]) {
+        debitosPorLoja[nomeLoja] = [];
+      }
+      debitosPorLoja[nomeLoja].push(debito);
+    });
+    Object.keys(debitosPorLoja).sort().forEach((nomeLoja) => {
+      checkNewPage(60);
+      doc.setFontSize(14);
+      doc.text(`LOJA: ${nomeLoja}`, 20, yPos);
+      yPos += 8;
+      const debitosLoja = debitosPorLoja[nomeLoja];
+      const valorTotalLoja = debitosLoja.reduce((sum, d) => sum + d.valor, 0);
+      const pendentesLoja = debitosLoja.filter((d) => d.status === "pendente");
+      doc.setFontSize(9);
+      doc.text(`Total de d\xE9bitos: ${debitosLoja.length} | Pendentes: ${pendentesLoja.length} | Valor total: R$ ${valorTotalLoja.toFixed(2)}`, 20, yPos);
+      yPos += 8;
+      doc.setFontSize(8);
+      doc.text("DESCRI\xC7\xC3O", 20, yPos);
+      doc.text("VALOR", 120, yPos);
+      doc.text("VENCIMENTO", 150, yPos);
+      doc.text("STATUS", 180, yPos);
+      yPos += 6;
+      doc.line(20, yPos, 195, yPos);
+      yPos += 3;
+      debitosLoja.sort((a, b) => new Date(a.dataVencimento) - new Date(b.dataVencimento)).forEach((debito) => {
+        checkNewPage(8);
+        const isVencido = new Date(debito.dataVencimento) < /* @__PURE__ */ new Date();
+        doc.setFontSize(7);
+        doc.text(debito.descricao.substring(0, 60), 20, yPos);
+        doc.text(`R$ ${debito.valor.toFixed(2)}`, 120, yPos);
+        doc.text((/* @__PURE__ */ new Date(debito.dataVencimento + "T12:00:00")).toLocaleDateString("pt-BR"), 150, yPos);
+        if (debito.status === "pendente" && isVencido) {
+          doc.setTextColor(255, 0, 0);
+          doc.text("VENCIDO", 180, yPos);
+        } else if (debito.status === "pendente") {
+          doc.setTextColor(255, 165, 0);
+          doc.text("PENDENTE", 180, yPos);
+        } else if (debito.status === "pago") {
+          doc.setTextColor(0, 128, 0);
+          doc.text("PAGO", 180, yPos);
+        }
+        doc.setTextColor(0, 0, 0);
+        yPos += 6;
+      });
+      yPos += 3;
+      doc.line(20, yPos, 195, yPos);
+      yPos += 5;
+      doc.setFontSize(8);
+      doc.text(`SUBTOTAL ${nomeLoja.toUpperCase()}: R$ ${valorTotalLoja.toFixed(2)}`, 20, yPos);
+      yPos += 15;
+    });
+    checkNewPage(30);
+    yPos += 10;
+    doc.line(20, yPos, 195, yPos);
+    yPos += 8;
+    doc.setFontSize(12);
+    doc.text(`TOTAL GERAL: R$ ${debitosPendentes.reduce((sum, d) => sum + d.valor, 0).toFixed(2)}`, 20, yPos);
+    yPos += 6;
+    doc.setFontSize(10);
+    doc.text(`TOTAL PENDENTE: R$ ${debitosPendentesAtivos.reduce((sum, d) => sum + d.valor, 0).toFixed(2)}`, 20, yPos);
+    const dataAtual = (/* @__PURE__ */ new Date()).toISOString().split("T")[0].replace(/-/g, "");
+    doc.save(`debitos-pendentes-${dataAtual}.pdf`);
+    toast.success("PDF de d\xE9bitos exportado com sucesso!");
+  };
+  const exportarDebitosCSV = () => {
+    if (debitosPendentes.length === 0) {
+      toast.error("Nenhum d\xE9bito dispon\xEDvel para exportar!");
+      return;
+    }
+    let csvContent = "Loja,Descri\xE7\xE3o,Valor,Data Vencimento,Status,Data Cria\xE7\xE3o\n";
+    debitosPendentes.forEach((debito) => {
+      const loja = lojas.find((l) => l.id === debito.lojaId);
+      const nomeLoja = loja ? loja.nome.replace(/,/g, ";") : "Loja n\xE3o encontrada";
+      const descricao = debito.descricao.replace(/,/g, ";");
+      csvContent += `${nomeLoja},${descricao},${debito.valor.toFixed(2)},${debito.dataVencimento},${debito.status},${debito.dataCriacao}
+`;
+    });
+    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+    const link = document.createElement("a");
+    if (link.download !== void 0) {
+      const url = URL.createObjectURL(blob);
+      link.setAttribute("href", url);
+      const dataAtual = (/* @__PURE__ */ new Date()).toISOString().split("T")[0].replace(/-/g, "");
+      link.setAttribute("download", `debitos-pendentes-${dataAtual}.csv`);
+      link.style.visibility = "hidden";
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      toast.success("CSV de d\xE9bitos exportado com sucesso!");
+    }
+  };
+  const editMotoboy = (motoboy) => {
+    setEditingMotoboy(motoboy);
+    setMotoboyForm({
+      nome: motoboy.nome,
+      cpf: motoboy.cpf,
+      telefone: motoboy.telefone,
+      status: motoboy.status
+    });
+  };
+  const cancelarEdicaoMotoboy = () => {
+    setEditingMotoboy(null);
+    setMotoboyForm({
+      nome: "",
+      cpf: "",
+      telefone: "",
+      status: "ativo"
+    });
+  };
+  const deleteMotoboy = async (id) => {
+    toast((t) => /* @__PURE__ */ React.createElement("div", { className: "flex flex-col items-center" }, /* @__PURE__ */ React.createElement("span", { className: "mb-3" }, "Tem certeza que deseja excluir este motoboy?"), /* @__PURE__ */ React.createElement("div", { className: "flex gap-2" }, /* @__PURE__ */ React.createElement(
+      "button",
+      {
+        onClick: () => {
+          const novosMotoboys = motoboys.filter((m) => m.id !== id);
+          setMotoboys(novosMotoboys);
+          toast.dismiss(t.id);
+          toast.success("Motoboy exclu\xEDdo com sucesso!");
+        },
+        className: "bg-red-600 text-white px-3 py-1 rounded text-sm hover:bg-red-700"
+      },
+      "Excluir"
+    ), /* @__PURE__ */ React.createElement(
+      "button",
+      {
+        onClick: () => toast.dismiss(t.id),
+        className: "bg-gray-600 text-white px-3 py-1 rounded text-sm hover:bg-gray-700"
+      },
+      "Cancelar"
+    ))), {
+      duration: 1e4
+    });
+  };
+  const aplicarFiltrosMotoboy = () => {
+    let resultado = [...motoboys];
+    if (filtrosMotoboy.nome) {
+      resultado = resultado.filter(
+        (m) => m.nome.toLowerCase().includes(filtrosMotoboy.nome.toLowerCase())
+      );
+    }
+    if (filtrosMotoboy.status) {
+      resultado = resultado.filter((m) => m.status === filtrosMotoboy.status);
+    }
+    if (filtrosMotoboy.cpf) {
+      resultado = resultado.filter(
+        (m) => m.cpf.includes(filtrosMotoboy.cpf)
+      );
+    }
+    setMotoboysFiltrados(resultado);
+  };
+  const limparFiltrosMotoboy = () => {
+    setFiltrosMotoboy({
+      nome: "",
+      status: "",
+      cpf: ""
+    });
+    setMotoboysFiltrados(motoboys);
+  };
+  const editLoja = (loja) => {
+    setEditingLoja(loja);
+    setLojaForm({
+      nome: loja.nome,
+      cnpj: loja.cnpj,
+      contato: loja.contato,
+      valorHoraSegSab: loja.valorHoraSegSab || 12,
+      valorHoraDomFeriado: loja.valorHoraDomFeriado || 13.33,
+      valorCorridaAte5km: loja.valorCorridaAte5km || 5,
+      valorCorridaAcima5km: loja.valorCorridaAcima5km || 8,
+      taxaAdministrativa: loja.taxaAdministrativa || 350,
+      taxaSupervisao: loja.taxaSupervisao || 50,
+      limiteValorFixo: loja.limiteValorFixo || 1e3,
+      percentualTaxa: loja.percentualTaxa || 10,
+      usarTaxaPercentual: loja.usarTaxaPercentual || false
+    });
+  };
+  const deleteLoja = async (id) => {
+    toast((t) => /* @__PURE__ */ React.createElement("div", { className: "flex flex-col items-center" }, /* @__PURE__ */ React.createElement("span", { className: "mb-3" }, "Tem certeza que deseja excluir esta loja?"), /* @__PURE__ */ React.createElement("div", { className: "flex gap-2" }, /* @__PURE__ */ React.createElement(
+      "button",
+      {
+        onClick: () => {
+          const novasLojas = lojas.filter((l) => l.id !== id);
+          setLojas(novasLojas);
+          toast.dismiss(t.id);
+          toast.success("Loja exclu\xEDda com sucesso!");
+        },
+        className: "bg-red-600 text-white px-3 py-1 rounded text-sm hover:bg-red-700"
+      },
+      "Excluir"
+    ), /* @__PURE__ */ React.createElement(
+      "button",
+      {
+        onClick: () => toast.dismiss(t.id),
+        className: "bg-gray-600 text-white px-3 py-1 rounded text-sm hover:bg-gray-700"
+      },
+      "Cancelar"
+    ))), {
+      duration: 1e4
+    });
+  };
+  const cancelarEdicaoLoja = () => {
+    setEditingLoja(null);
+    setLojaForm({
+      nome: "",
+      cnpj: "",
+      contato: "",
+      valorHoraSegSab: 12,
+      valorHoraDomFeriado: 13.33,
+      valorCorridaAte5km: 5,
+      valorCorridaAcima5km: 8,
+      taxaAdministrativa: 350,
+      taxaSupervisao: 50,
+      limiteValorFixo: 1e3,
+      percentualTaxa: 10,
+      usarTaxaPercentual: false
+    });
+  };
+  const editJornada = (jornada) => {
+    setEditingJornada(jornada);
+    setJornadaForm({
+      data: jornada.data,
+      // Manter a data exatamente como está salva
+      motoboyId: jornada.motoboyId,
+      lojaId: jornada.lojaId,
+      valorDiaria: jornada.valorDiaria || 120,
+      valorCorridas: jornada.valorCorridas || 0,
+      comissoes: jornada.comissoes || 0,
+      missoes: jornada.missoes || 0,
+      descontos: jornada.descontos || 0,
+      eFeriado: jornada.eFeriado || false,
+      observacoes: jornada.observacoes || ""
+    });
+    setCadastroMultiplo(false);
+    setShowJornadaForm(true);
+  };
+  const deleteJornada = (id) => {
+    toast((t) => /* @__PURE__ */ React.createElement("div", { className: "flex flex-col items-center" }, /* @__PURE__ */ React.createElement("span", { className: "mb-3" }, "Tem certeza que deseja excluir esta jornada?"), /* @__PURE__ */ React.createElement("div", { className: "flex gap-2" }, /* @__PURE__ */ React.createElement(
+      "button",
+      {
+        onClick: () => {
+          const novasJornadas = jornadas.filter((j) => j.id !== id);
+          setJornadas(novasJornadas);
+          aplicarFiltros(novasJornadas);
+          toast.dismiss(t.id);
+          toast.success("Jornada exclu\xEDda com sucesso!");
+        },
+        className: "bg-red-600 text-white px-3 py-1 rounded text-sm hover:bg-red-700"
+      },
+      "Excluir"
+    ), /* @__PURE__ */ React.createElement(
+      "button",
+      {
+        onClick: () => toast.dismiss(t.id),
+        className: "bg-gray-600 text-white px-3 py-1 rounded text-sm hover:bg-gray-700"
+      },
+      "Cancelar"
+    ))), {
+      duration: 1e4
+    });
+  };
+  const aplicarFiltros = (jornadasParaFiltrar = jornadas) => {
+    let resultado = getJornadasFiltradas(jornadasParaFiltrar);
+    if (filtros.dataInicio) {
+      resultado = resultado.filter((j) => j.data >= filtros.dataInicio);
+    }
+    if (filtros.dataFim) {
+      resultado = resultado.filter((j) => j.data <= filtros.dataFim);
+    }
+    if (filtros.motoboyId) {
+      resultado = resultado.filter((j) => j.motoboyId === filtros.motoboyId);
+    }
+    if (filtros.lojaId) {
+      resultado = resultado.filter((j) => j.lojaId === filtros.lojaId);
+    }
+    if (filtros.eFeriado) {
+      resultado = resultado.filter((j) => j.eFeriado === true);
+    }
+    if (filtros.busca) {
+      resultado = resultado.filter((j) => {
+        const motoboy = motoboys.find((m) => m.id === j.motoboyId);
+        const loja = lojas.find((l) => l.id === j.lojaId);
+        const termoBusca = filtros.busca.toLowerCase();
+        return (motoboy?.nome || "").toLowerCase().includes(termoBusca) || (loja?.nome || "").toLowerCase().includes(termoBusca);
+      });
+    }
+    setJornadasFiltradas(resultado);
+  };
+  const limparFiltros = () => {
+    setFiltros({
+      dataInicio: "",
+      dataFim: "",
+      motoboyId: "",
+      lojaId: "",
+      eFeriado: false,
+      busca: ""
+    });
+    setJornadasFiltradas(getJornadasFiltradas(jornadas));
+  };
+  const calcularSemanaIdentificador = (dataInicio, dataFim) => {
+    const inicio = new Date(dataInicio);
+    const ano = inicio.getFullYear();
+    const jan1 = new Date(ano, 0, 1);
+    const diasDoAno = Math.floor((inicio - jan1) / (24 * 60 * 60 * 1e3));
+    const numeroSemana = Math.ceil((diasDoAno + jan1.getDay() + 1) / 7);
+    return `${ano}-W${numeroSemana.toString().padStart(2, "0")}`;
+  };
+  const obterPeriodoSemanaAtual = () => {
+    const hoje = /* @__PURE__ */ new Date();
+    const diaSemana = hoje.getDay();
+    const segunda = new Date(hoje);
+    const diasParaSegunda = diaSemana === 0 ? -6 : -(diaSemana - 1);
+    segunda.setDate(hoje.getDate() + diasParaSegunda);
+    const quarta = new Date(segunda);
+    quarta.setDate(segunda.getDate() + 2);
+    return {
+      inicio: segunda.toISOString().split("T")[0],
+      fim: quarta.toISOString().split("T")[0]
     };
-    return /* @__PURE__ */ React.createElement(Modal, { isOpen: showAdiantamentoModal, onClose: handleClose, title: "Registro de Adiantamento" }, /* @__PURE__ */ React.createElement("form", { onSubmit: handleSubmit, className: "space-y-4" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("label", { className: "block text-sm font-medium mb-1" }, "Motoboy"), /* @__PURE__ */ React.createElement(
+  };
+  const gerarRelatorios = () => {
+    if (!relatorioConfig.dataInicio || !relatorioConfig.dataFim) {
+      toast.error("Selecione as datas de in\xEDcio e fim do per\xEDodo!");
+      return;
+    }
+    if (relatorioConfig.dataInicio > relatorioConfig.dataFim) {
+      toast.error("A data de in\xEDcio deve ser menor ou igual \xE0 data de fim!");
+      return;
+    }
+    const dataInicio = relatorioConfig.dataInicio;
+    const dataFim = relatorioConfig.dataFim;
+    const jornadasParaProcessar = getJornadasFiltradas();
+    const adiantamentosParaProcessar = getAdiantamentosFiltrados();
+    const debitosParaProcessar = getDebitosFiltrados();
+    const lojasParaProcessar = getLojasFiltradas();
+    console.log("\u{1F5D3}\uFE0F === DEBUG FILTRO DE RELAT\xD3RIOS ===");
+    console.log("\u{1F5D3}\uFE0F Per\xEDodo selecionado:", { dataInicio, dataFim });
+    console.log("\u{1F5D3}\uFE0F Usu\xE1rio logado:", currentUser?.tipo, currentUser?.lojaId);
+    console.log("\u{1F5D3}\uFE0F Total de jornadas dispon\xEDveis:", jornadasParaProcessar.length);
+    const datasJornadas = jornadasParaProcessar.map((j) => j.data).sort();
+    console.log("\u{1F5D3}\uFE0F Datas das jornadas dispon\xEDveis:", datasJornadas);
+    const jornadasPeriodo = jornadasParaProcessar.filter((j) => {
+      const dentroDoIntervalo = j.data >= dataInicio && j.data <= dataFim;
+      if (dentroDoIntervalo) {
+        console.log("\u2705 Jornada inclu\xEDda:", j.data, "Motoboy:", j.motoboyId);
+      }
+      return dentroDoIntervalo;
+    });
+    console.log("\u{1F4CA} Jornadas encontradas no per\xEDodo:", jornadasPeriodo.length);
+    console.log("\u{1F4CA} Datas das jornadas filtradas:", jornadasPeriodo.map((j) => j.data).sort());
+    console.log("\u{1F4B0} Total de d\xE9bitos dispon\xEDveis:", debitosParaProcessar.length);
+    console.log("\u{1F4B0} D\xE9bitos por status:", debitosParaProcessar.reduce((acc, d) => {
+      acc[d.status] = (acc[d.status] || 0) + 1;
+      return acc;
+    }, {}));
+    console.log("\u{1F4B0} Lojas com d\xE9bitos pendentes:", debitosParaProcessar.filter((d) => d.status === "pendente").map((d) => {
+      const loja = lojasParaProcessar.find((l) => l.id === d.lojaId);
+      return `${loja?.nome}: ${d.descricao} - R$ ${d.valor}`;
+    }));
+    const relatoriosPorLoja = lojasParaProcessar.map((loja) => {
+      const jornadasLoja = jornadasPeriodo.filter((j) => j.lojaId === loja.id);
+      console.log(`\u{1F3EA} Loja ${loja.nome}: ${jornadasLoja.length} jornadas`);
+      if (jornadasLoja.length === 0) {
+        return null;
+      }
+      const motoboysMap = /* @__PURE__ */ new Map();
+      jornadasLoja.forEach((jornada) => {
+        const motoboyId = jornada.motoboyId;
+        const motoboy = motoboys.find((m) => m.id === motoboyId);
+        if (!motoboy) {
+          console.warn("\u26A0\uFE0F Motoboy n\xE3o encontrado:", motoboyId);
+          return;
+        }
+        const periodoSemanaAtual = obterPeriodoSemanaAtual();
+        console.log("\u{1F4C5} Per\xEDodo semana atual (seg-qua):", periodoSemanaAtual);
+        const adiantamentosMotoboyLoja = adiantamentosParaProcessar.filter((a) => {
+          if (a.motoboyId !== motoboyId || a.lojaId !== loja.id) return false;
+          const noPeriodoRelatorio = a.data >= dataInicio && a.data <= dataFim;
+          const naSemanaAtual = a.data >= periodoSemanaAtual.inicio && a.data <= periodoSemanaAtual.fim;
+          const incluir = noPeriodoRelatorio || naSemanaAtual;
+          if (incluir) {
+            console.log(`\u{1F4B0} Adiantamento inclu\xEDdo: ${a.data} - R$ ${a.valor} (${noPeriodoRelatorio ? "per\xEDodo" : "semana atual"})`);
+          }
+          return incluir;
+        });
+        const totalCorridasJornada = jornada.valorCorridas || 0;
+        if (motoboysMap.has(motoboyId)) {
+          const existente = motoboysMap.get(motoboyId);
+          motoboysMap.set(motoboyId, {
+            ...existente,
+            valorDiaria: (existente.valorDiaria || 0) + (jornada.valorDiaria || 0),
+            valorCorridas: (existente.valorCorridas || 0) + (jornada.valorCorridas || 0),
+            comissoes: (existente.comissoes || 0) + (jornada.comissoes || 0),
+            missoes: (existente.missoes || 0) + (jornada.missoes || 0),
+            descontos: (existente.descontos || 0) + (jornada.descontos || 0),
+            totalCorridas: (existente.totalCorridas || 0) + totalCorridasJornada,
+            eFeriado: existente.eFeriado || jornada.eFeriado,
+            // Se teve pelo menos um feriado
+            jornadas: [...existente.jornadas, jornada]
+          });
+        } else {
+          motoboysMap.set(motoboyId, {
+            id: `${motoboyId}-${loja.id}`,
+            motoboy,
+            motoboyId,
+            lojaId: loja.id,
+            valorDiaria: jornada.valorDiaria || 0,
+            valorCorridas: jornada.valorCorridas || 0,
+            comissoes: jornada.comissoes || 0,
+            missoes: jornada.missoes || 0,
+            descontos: jornada.descontos || 0,
+            totalCorridas: totalCorridasJornada,
+            eFeriado: jornada.eFeriado || false,
+            adiantamentos: adiantamentosMotoboyLoja,
+            totalAdiantamentos: adiantamentosMotoboyLoja.reduce((sum, a) => sum + (a.valor || 0), 0),
+            jornadas: [jornada]
+          });
+        }
+      });
+      const motoboysConsolidados = Array.from(motoboysMap.values()).map((motoboyData) => {
+        const totalBruto = (motoboyData.valorDiaria || 0) + (motoboyData.totalCorridas || 0) + (motoboyData.comissoes || 0) + (motoboyData.missoes || 0);
+        const totalLiquido = totalBruto - (motoboyData.descontos || 0) - (motoboyData.totalAdiantamentos || 0);
+        console.log(`\u{1F464} ${motoboyData.motoboy.nome}:`, {
+          diaria: motoboyData.valorDiaria,
+          corridas: motoboyData.totalCorridas,
+          comissoes: motoboyData.comissoes + motoboyData.missoes,
+          bruto: totalBruto,
+          adiantamentos: motoboyData.totalAdiantamentos,
+          liquido: totalLiquido
+        });
+        return {
+          ...motoboyData,
+          totalBruto,
+          totalLiquido: totalBruto - (motoboyData.descontos || 0)
+          // Não descontar adiantamentos no relatório principal
+        };
+      });
+      const totalBrutoLoja = motoboysConsolidados.reduce((sum, m) => sum + (m.totalBruto || 0), 0);
+      const totalLiquidoLoja = motoboysConsolidados.reduce((sum, m) => sum + (m.totalLiquido || 0), 0);
+      const totalAdiantamentosLoja = motoboysConsolidados.reduce((sum, m) => sum + (m.totalAdiantamentos || 0), 0);
+      let valorTaxaAdmin = loja.taxaAdministrativa || 0;
+      if (loja.usarTaxaPercentual && totalLiquidoLoja > (loja.limiteValorFixo || 0)) {
+        valorTaxaAdmin = totalLiquidoLoja * (loja.percentualTaxa || 0) / 100;
+        console.log(`\u{1F3EA} ${loja.nome}: Usando taxa percentual de ${loja.percentualTaxa}% = R$ ${valorTaxaAdmin.toFixed(2)}`);
+      } else {
+        console.log(`\u{1F3EA} ${loja.nome}: Usando taxa fixa de R$ ${valorTaxaAdmin.toFixed(2)}`);
+      }
+      const valorTaxaSupervisao = loja.taxaSupervisao || 0;
+      const totalTaxas = valorTaxaAdmin + valorTaxaSupervisao;
+      const debitosLoja = debitosParaProcessar.filter(
+        (d) => d.lojaId === loja.id && d.status === "pendente"
+      );
+      const totalDebitos = debitosLoja.reduce((sum, d) => sum + (d.valor || 0), 0);
+      console.log(`\u{1F4B0} D\xE9bitos encontrados para ${loja.nome}:`, debitosLoja.length);
+      console.log(`\u{1F4B0} Total d\xE9bitos ${loja.nome}:`, totalDebitos);
+      const totalFinal = totalLiquidoLoja + totalTaxas + totalDebitos;
+      console.log(`\u{1F3EA} Totais ${loja.nome}:`, {
+        bruto: totalBrutoLoja,
+        liquido: totalLiquidoLoja,
+        adiantamentos: totalAdiantamentosLoja,
+        taxas: totalTaxas,
+        debitos: totalDebitos,
+        final: totalFinal
+      });
+      console.log(`\u{1F4C5} Per\xEDodo para card da loja ${loja.nome}:`, {
+        dataInicio,
+        dataFim,
+        inicioFormatado: (/* @__PURE__ */ new Date(dataInicio + "T12:00:00")).toLocaleDateString("pt-BR"),
+        fimFormatado: (/* @__PURE__ */ new Date(dataFim + "T12:00:00")).toLocaleDateString("pt-BR")
+      });
+      return {
+        loja,
+        motoboys: motoboysConsolidados,
+        totais: {
+          bruto: totalBrutoLoja,
+          liquido: totalLiquidoLoja,
+          adiantamentos: totalAdiantamentosLoja,
+          taxaAdmin: valorTaxaAdmin,
+          taxaSupervisao: valorTaxaSupervisao,
+          totalTaxas,
+          debitos: totalDebitos,
+          final: totalFinal
+        },
+        debitos: debitosLoja,
+        periodo: {
+          inicio: dataInicio,
+          fim: dataFim,
+          semana: calcularSemanaIdentificador(dataInicio, dataFim)
+        }
+      };
+    }).filter((relatorio) => relatorio !== null);
+    console.log("\u{1F4CB} Relat\xF3rios gerados:", relatoriosPorLoja.length);
+    setRelatorioLojas(relatoriosPorLoja);
+  };
+  const gerarPDF = (grupo) => {
+    const doc = new jsPDF();
+    const pageWidth = doc.internal.pageSize.width;
+    const pageHeight = doc.internal.pageSize.height;
+    let yPos = 30;
+    const addNewPage = () => {
+      doc.addPage();
+      yPos = 30;
+      addHeaderToPage();
+    };
+    const checkNewPage = (requiredHeight) => {
+      if (yPos + requiredHeight > pageHeight - 30) {
+        addNewPage();
+      }
+    };
+    const addHeaderToPage = () => {
+      doc.setFontSize(18);
+      doc.setFont("helvetica", "bold");
+      doc.setTextColor(0, 0, 0);
+      doc.text("EXPRESSO NEVES", pageWidth / 2, 20, { align: "center" });
+      doc.setLineWidth(0.5);
+      doc.line(20, 25, pageWidth - 20, 25);
+      yPos = 35;
+    };
+    addHeaderToPage();
+    doc.setFontSize(14);
+    doc.setFont("helvetica", "bold");
+    doc.setTextColor(41, 128, 185);
+    doc.text("RELAT\xD3RIO FINANCEIRO SEMANAL", pageWidth / 2, yPos, { align: "center" });
+    yPos += 15;
+    doc.setFontSize(12);
+    doc.setFont("helvetica", "bold");
+    doc.setTextColor(0, 0, 0);
+    doc.text("DADOS DA LOJA:", 20, yPos);
+    yPos += 8;
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(10);
+    doc.text(`Nome: ${grupo.loja.nome}`, 25, yPos);
+    yPos += 6;
+    doc.text(`CNPJ: ${grupo.loja.cnpj}`, 25, yPos);
+    yPos += 6;
+    doc.text(`Contato: ${grupo.loja.contato}`, 25, yPos);
+    yPos += 6;
+    doc.text(`Per\xEDodo: ${(/* @__PURE__ */ new Date(grupo.periodo.inicio + "T12:00:00")).toLocaleDateString("pt-BR")} at\xE9 ${(/* @__PURE__ */ new Date(grupo.periodo.fim + "T12:00:00")).toLocaleDateString("pt-BR")}`, 25, yPos);
+    yPos += 6;
+    doc.text(`Data de Emiss\xE3o: ${(/* @__PURE__ */ new Date()).toLocaleDateString("pt-BR")} \xE0s ${(/* @__PURE__ */ new Date()).toLocaleTimeString("pt-BR")}`, 25, yPos);
+    yPos += 15;
+    checkNewPage(40);
+    doc.setFillColor(240, 248, 255);
+    doc.rect(20, yPos - 5, pageWidth - 40, 35, "F");
+    doc.setDrawColor(41, 128, 185);
+    doc.rect(20, yPos - 5, pageWidth - 40, 35);
+    doc.setFontSize(11);
+    doc.setFont("helvetica", "bold");
+    doc.setTextColor(41, 128, 185);
+    doc.text("RESUMO EXECUTIVO", 25, yPos + 5);
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(10);
+    doc.setTextColor(0, 0, 0);
+    doc.text(`Valor Total a Pagar: R$ ${grupo.totais.final.toFixed(2)}`, 25, yPos + 15);
+    doc.text(`Total Log\xEDstica: R$ ${grupo.totais.liquido.toFixed(2)}`, 25, yPos + 22);
+    doc.text(`Total Taxas: R$ ${(grupo.totais.taxaAdmin + grupo.totais.taxaSupervisao).toFixed(2)}`, 100, yPos + 15);
+    doc.text(`D\xE9bitos Pendentes: R$ ${grupo.totais.debitos.toFixed(2)}`, 100, yPos + 22);
+    yPos += 45;
+    checkNewPage(50);
+    doc.setFontSize(12);
+    doc.setFont("helvetica", "bold");
+    doc.setTextColor(0, 0, 0);
+    doc.text("DETALHAMENTO POR MOTOBOY:", 20, yPos);
+    yPos += 10;
+    doc.setFontSize(12);
+    doc.setFont("helvetica", "bold");
+    doc.text("DADOS SEMANAIS DE CORRIDAS:", 20, yPos);
+    yPos += 12;
+    const tableHeaders1 = ["MOTOBOY", "SEG", "TER", "QUA", "QUI", "SEX", "SAB", "DOM"];
+    const colWidths1 = [50, 17, 17, 17, 17, 17, 17, 17];
+    const tableWidth1 = colWidths1.reduce((sum, width) => sum + width, 0);
+    const tableHeight1 = 10;
+    doc.setFillColor(52, 73, 94);
+    doc.rect(20, yPos - 2, tableWidth1, tableHeight1, "F");
+    doc.setDrawColor(0, 0, 0);
+    doc.rect(20, yPos - 2, tableWidth1, tableHeight1, "S");
+    doc.setFontSize(8);
+    doc.setFont("helvetica", "bold");
+    doc.setTextColor(255, 255, 255);
+    let xPos = 20;
+    tableHeaders1.forEach((header, index) => {
+      doc.text(header, xPos + colWidths1[index] / 2, yPos + 4, { align: "center" });
+      xPos += colWidths1[index];
+    });
+    yPos += tableHeight1;
+    let rowIndex = 0;
+    grupo.motoboys.forEach((motoboy) => {
+      checkNewPage(10);
+      if (rowIndex % 2 === 0) {
+        doc.setFillColor(248, 249, 250);
+        doc.rect(20, yPos, tableWidth1, 8, "F");
+      }
+      doc.setDrawColor(200, 200, 200);
+      doc.rect(20, yPos, tableWidth1, 8, "S");
+      xPos = 20;
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(7);
+      doc.setTextColor(0, 0, 0);
+      doc.text(motoboy.motoboy.nome.substring(0, 16), xPos + 2, yPos + 5);
+      xPos += colWidths1[0];
+      const jornadasPorDia = {};
+      motoboy.jornadas.forEach((jornada) => {
+        const data = /* @__PURE__ */ new Date(jornada.data + "T12:00:00");
+        const diaSemana = data.getDay();
+        jornadasPorDia[diaSemana] = jornada;
+      });
+      [1, 2, 3, 4, 5, 6, 0].forEach((dia, index) => {
+        const jornada = jornadasPorDia[dia];
+        const colIndex = index + 1;
+        if (jornada) {
+          const valorCorridas = jornada.valorCorridas || 0;
+          doc.setTextColor(46, 125, 50);
+          doc.text(`${valorCorridas.toFixed(0)}`, xPos + colWidths1[colIndex] / 2, yPos + 5, { align: "center" });
+          doc.setTextColor(0, 0, 0);
+        } else {
+          doc.text("-", xPos + colWidths1[colIndex] / 2, yPos + 5, { align: "center" });
+        }
+        xPos += colWidths1[colIndex];
+      });
+      yPos += 8;
+      rowIndex++;
+    });
+    yPos += 15;
+    checkNewPage(50);
+    doc.setFontSize(12);
+    doc.setFont("helvetica", "bold");
+    doc.setTextColor(0, 0, 0);
+    doc.text("VALORES CONSOLIDADOS:", 20, yPos);
+    yPos += 12;
+    const tableHeaders2 = ["MOTOBOY", "DI\xC1RIA", "TAXA", "MISS\xD5ES", "DESCONTOS", "ADIANT.", "TOTAL"];
+    const colWidths2 = [50, 22, 22, 22, 22, 22, 22];
+    const tableWidth2 = colWidths2.reduce((sum, width) => sum + width, 0);
+    const tableHeight2 = 10;
+    doc.setFillColor(52, 73, 94);
+    doc.rect(20, yPos - 2, tableWidth2, tableHeight2, "F");
+    doc.setDrawColor(0, 0, 0);
+    doc.rect(20, yPos - 2, tableWidth2, tableHeight2, "S");
+    doc.setFontSize(8);
+    doc.setFont("helvetica", "bold");
+    doc.setTextColor(255, 255, 255);
+    xPos = 20;
+    tableHeaders2.forEach((header, index) => {
+      doc.text(header, xPos + colWidths2[index] / 2, yPos + 4, { align: "center" });
+      xPos += colWidths2[index];
+    });
+    yPos += tableHeight2;
+    rowIndex = 0;
+    grupo.motoboys.forEach((motoboy) => {
+      checkNewPage(10);
+      if (rowIndex % 2 === 0) {
+        doc.setFillColor(248, 249, 250);
+        doc.rect(20, yPos, tableWidth2, 8, "F");
+      }
+      doc.setDrawColor(200, 200, 200);
+      doc.rect(20, yPos, tableWidth2, 8, "S");
+      xPos = 20;
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(7);
+      doc.setTextColor(0, 0, 0);
+      doc.text(motoboy.motoboy.nome.substring(0, 16), xPos + 2, yPos + 5);
+      xPos += colWidths2[0];
+      const consolidatedData = [
+        `${motoboy.valorDiaria.toFixed(0)}`,
+        `${motoboy.totalCorridas.toFixed(0)}`,
+        `${(motoboy.comissoes + motoboy.missoes).toFixed(0)}`,
+        `${motoboy.descontos.toFixed(0)}`,
+        `${motoboy.totalAdiantamentos.toFixed(0)}`,
+        `${motoboy.totalLiquido.toFixed(0)}`
+      ];
+      consolidatedData.forEach((data, index) => {
+        const colIndex = index + 1;
+        if (index === 3 || index === 4) {
+          doc.setTextColor(211, 47, 47);
+        } else if (index === 5) {
+          doc.setTextColor(46, 125, 50);
+        } else {
+          doc.setTextColor(0, 0, 0);
+        }
+        doc.text(data, xPos + colWidths2[colIndex] / 2, yPos + 5, { align: "center" });
+        xPos += colWidths2[colIndex];
+      });
+      doc.setTextColor(0, 0, 0);
+      yPos += 8;
+      rowIndex++;
+    });
+    doc.setFillColor(46, 125, 50);
+    doc.rect(20, yPos, tableWidth2, 10, "F");
+    doc.setDrawColor(0, 0, 0);
+    doc.rect(20, yPos, tableWidth2, 10, "S");
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(9);
+    doc.setTextColor(255, 255, 255);
+    doc.text("TOTAL LOG\xCDSTICA", 22, yPos + 6);
+    doc.text(`R$ ${grupo.totais.liquido.toFixed(2)}`, 20 + tableWidth2 - 25, yPos + 6, { align: "right" });
+    yPos += 20;
+    doc.setFillColor(240, 240, 240);
+    doc.rect(20, yPos, pageWidth - 40, 8, "F");
+    doc.setFont("helvetica", "bold");
+    doc.text("TOTAL LOG\xCDSTICA", 22, yPos + 5);
+    doc.text(`R$ ${grupo.totais.liquido.toFixed(2)}`, pageWidth - 45, yPos + 5, { align: "center" });
+    yPos += 20;
+    checkNewPage(60);
+    doc.setFontSize(12);
+    doc.setFont("helvetica", "bold");
+    doc.text("COMPOSI\xC7\xC3O FINANCEIRA:", 20, yPos);
+    yPos += 10;
+    const compData = [
+      ["Descri\xE7\xE3o", "Valor", "Observa\xE7\xF5es"],
+      ["Total Log\xEDstica", `R$ ${grupo.totais.liquido.toFixed(2)}`, "Soma de todos os motoboys"],
+      [
+        "Taxa Administrativa",
+        `R$ ${grupo.totais.taxaAdmin.toFixed(2)}`,
+        grupo.loja.usarTaxaPercentual && grupo.totais.liquido > (grupo.loja.limiteValorFixo || 0) ? `${grupo.loja.percentualTaxa}% sobre o total` : "Taxa fixa"
+      ],
+      ["Taxa Supervis\xE3o", `R$ ${grupo.totais.taxaSupervisao.toFixed(2)}`, "Taxa fixa de supervis\xE3o"],
+      ["D\xE9bitos Pendentes", `R$ ${grupo.totais.debitos.toFixed(2)}`, `${grupo.debitos.length} d\xE9bito(s)`]
+    ];
+    compData.forEach((row, index) => {
+      checkNewPage(8);
+      if (index === 0) {
+        doc.setFillColor(220, 220, 220);
+        doc.rect(20, yPos - 2, pageWidth - 40, 8, "F");
+        doc.setFont("helvetica", "bold");
+        doc.setFontSize(9);
+      } else {
+        doc.setFont("helvetica", "normal");
+        doc.setFontSize(8);
+        if (index === compData.length - 1) {
+          doc.setFillColor(255, 248, 220);
+          doc.rect(20, yPos - 2, pageWidth - 40, 8, "F");
+        }
+      }
+      doc.text(row[0], 22, yPos + 3);
+      doc.text(row[1], 80, yPos + 3);
+      doc.text(row[2], 120, yPos + 3);
+      doc.setDrawColor(200, 200, 200);
+      doc.line(20, yPos + 5, pageWidth - 20, yPos + 5);
+      yPos += 8;
+    });
+    yPos += 5;
+    doc.setFillColor(41, 128, 185);
+    doc.rect(20, yPos - 5, pageWidth - 40, 15, "F");
+    doc.setFontSize(14);
+    doc.setFont("helvetica", "bold");
+    doc.setTextColor(255, 255, 255);
+    doc.text("VALOR TOTAL A PAGAR:", 25, yPos + 5);
+    doc.text(`R$ ${grupo.totais.final.toFixed(2)}`, pageWidth - 25, yPos + 5, { align: "right" });
+    yPos += 20;
+    if (grupo.debitos && grupo.debitos.length > 0) {
+      checkNewPage(40);
+      doc.setFontSize(11);
+      doc.setFont("helvetica", "bold");
+      doc.setTextColor(0, 0, 0);
+      doc.text("D\xC9BITOS PENDENTES DETALHADOS:", 20, yPos);
+      yPos += 10;
+      grupo.debitos.forEach((debito) => {
+        checkNewPage(12);
+        doc.setFontSize(8);
+        doc.setFont("helvetica", "normal");
+        doc.setFillColor(250, 250, 250);
+        doc.rect(20, yPos - 2, pageWidth - 40, 10, "F");
+        doc.text(`\u2022 ${debito.descricao}`, 25, yPos + 2);
+        doc.text(`R$ ${debito.valor.toFixed(2)}`, 120, yPos + 2);
+        doc.text(`Vencimento: ${(/* @__PURE__ */ new Date(debito.dataVencimento + "T12:00:00")).toLocaleDateString("pt-BR")}`, 25, yPos + 6);
+        yPos += 12;
+      });
+    }
+    const addFooter = () => {
+      doc.setFontSize(8);
+      doc.setFont("helvetica", "normal");
+      doc.setTextColor(100, 100, 100);
+      doc.setDrawColor(200, 200, 200);
+      doc.line(20, pageHeight - 20, pageWidth - 20, pageHeight - 20);
+      doc.text("Expresso Neves - Relat\xF3rio Financeiro", 20, pageHeight - 15);
+      doc.text(`P\xE1gina ${doc.internal.getCurrentPageInfo().pageNumber}`, pageWidth - 20, pageHeight - 15, { align: "right" });
+      doc.text(`Gerado em: ${(/* @__PURE__ */ new Date()).toLocaleString("pt-BR")}`, pageWidth / 2, pageHeight - 15, { align: "center" });
+    };
+    const totalPages = doc.internal.getNumberOfPages();
+    for (let i = 1; i <= totalPages; i++) {
+      doc.setPage(i);
+      addFooter();
+    }
+    const dataInicioFormatada = grupo.periodo.inicio.replace(/-/g, "");
+    const dataFimFormatada = grupo.periodo.fim.replace(/-/g, "");
+    const nomeArquivo = `relatorio-${grupo.loja.nome.replace(/[^a-zA-Z0-9]/g, "-").toLowerCase()}-${dataInicioFormatada}-${dataFimFormatada}.pdf`;
+    doc.save(nomeArquivo);
+  };
+  const gerarPDFTodos = () => {
+    if (relatorioLojas.length === 0) {
+      toast.error("Nenhum relat\xF3rio dispon\xEDvel para exportar!");
+      return;
+    }
+    const doc = new jsPDF();
+    const pageHeight = doc.internal.pageSize.height;
+    const pageWidth = doc.internal.pageSize.width;
+    let yPos = 30;
+    const addNewPage = () => {
+      doc.addPage();
+      yPos = 30;
+      addHeaderToPage();
+    };
+    const checkNewPage = (requiredHeight) => {
+      if (yPos + requiredHeight > pageHeight - 30) {
+        addNewPage();
+      }
+    };
+    const addHeaderToPage = () => {
+      doc.setFontSize(18);
+      doc.setFont("helvetica", "bold");
+      doc.setTextColor(0, 0, 0);
+      doc.text("EXPRESSO NEVES", pageWidth / 2, 20, { align: "center" });
+      doc.setLineWidth(0.5);
+      doc.line(20, 25, pageWidth - 20, 25);
+      yPos = 35;
+    };
+    addHeaderToPage();
+    doc.setFontSize(16);
+    doc.setFont("helvetica", "bold");
+    doc.setTextColor(41, 128, 185);
+    doc.text("RELAT\xD3RIO CONSOLIDADO FINANCEIRO", pageWidth / 2, yPos, { align: "center" });
+    yPos += 15;
+    doc.setFontSize(10);
+    doc.setFont("helvetica", "normal");
+    doc.setTextColor(0, 0, 0);
+    if (relatorioLojas.length > 0) {
+      doc.text(`Per\xEDodo: ${(/* @__PURE__ */ new Date(relatorioLojas[0].periodo.inicio + "T12:00:00")).toLocaleDateString("pt-BR")} at\xE9 ${(/* @__PURE__ */ new Date(relatorioLojas[0].periodo.fim + "T12:00:00")).toLocaleDateString("pt-BR")}`, pageWidth / 2, yPos, { align: "center" });
+      yPos += 6;
+      doc.text(`Data de Emiss\xE3o: ${(/* @__PURE__ */ new Date()).toLocaleDateString("pt-BR")} \xE0s ${(/* @__PURE__ */ new Date()).toLocaleTimeString("pt-BR")}`, pageWidth / 2, yPos, { align: "center" });
+      yPos += 15;
+    }
+    const totalGeral = relatorioLojas.reduce((sum, grupo) => sum + grupo.totais.final, 0);
+    const totalLogistica = relatorioLojas.reduce((sum, grupo) => sum + grupo.totais.liquido, 0);
+    const totalTaxas = relatorioLojas.reduce((sum, grupo) => sum + grupo.totais.totalTaxas, 0);
+    const totalDebitos = relatorioLojas.reduce((sum, grupo) => sum + grupo.totais.debitos, 0);
+    doc.setFillColor(240, 248, 255);
+    doc.rect(20, yPos - 5, pageWidth - 40, 50, "F");
+    doc.setDrawColor(41, 128, 185);
+    doc.rect(20, yPos - 5, pageWidth - 40, 50);
+    doc.setFontSize(12);
+    doc.setFont("helvetica", "bold");
+    doc.setTextColor(41, 128, 185);
+    doc.text("RESUMO EXECUTIVO CONSOLIDADO", 25, yPos + 5);
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(10);
+    doc.setTextColor(0, 0, 0);
+    doc.text(`Total de Lojas Atendidas: ${relatorioLojas.length}`, 25, yPos + 15);
+    doc.text(`Total Log\xEDstica: R$ ${totalLogistica.toFixed(2)}`, 25, yPos + 23);
+    doc.text(`Total Taxas Administrativas: R$ ${totalTaxas.toFixed(2)}`, 25, yPos + 31);
+    doc.text(`Total D\xE9bitos Pendentes: R$ ${totalDebitos.toFixed(2)}`, 25, yPos + 39);
+    doc.setFillColor(41, 128, 185);
+    doc.rect(pageWidth - 80, yPos + 5, 55, 15, "F");
+    doc.setFontSize(11);
+    doc.setFont("helvetica", "bold");
+    doc.setTextColor(255, 255, 255);
+    doc.text("TOTAL GERAL:", pageWidth - 77, yPos + 12);
+    doc.text(`R$ ${totalGeral.toFixed(2)}`, pageWidth - 77, yPos + 18);
+    yPos += 60;
+    checkNewPage(60);
+    doc.setFontSize(12);
+    doc.setFont("helvetica", "bold");
+    doc.setTextColor(0, 0, 0);
+    doc.text("RESUMO POR LOJA:", 20, yPos);
+    yPos += 10;
+    const headerCols = ["LOJA", "LOG\xCDSTICA", "TAXAS", "D\xC9BITOS", "TOTAL"];
+    const colWidths = [60, 30, 30, 30, 30];
+    let xPos = 20;
+    doc.setFillColor(220, 220, 220);
+    doc.rect(20, yPos - 2, pageWidth - 40, 8, "F");
+    doc.setFontSize(9);
+    doc.setFont("helvetica", "bold");
+    headerCols.forEach((header, index) => {
+      doc.text(header, xPos + colWidths[index] / 2, yPos + 3, { align: "center" });
+      xPos += colWidths[index];
+    });
+    yPos += 10;
+    relatorioLojas.forEach((grupo, index) => {
+      checkNewPage(8);
+      xPos = 20;
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(8);
+      const rowData = [
+        grupo.loja.nome.substring(0, 25),
+        `R$ ${grupo.totais.liquido.toFixed(2)}`,
+        `R$ ${(grupo.totais.taxaAdmin + grupo.totais.taxaSupervisao).toFixed(2)}`,
+        `R$ ${grupo.totais.debitos.toFixed(2)}`,
+        `R$ ${grupo.totais.final.toFixed(2)}`
+      ];
+      if (index % 2 === 0) {
+        doc.setFillColor(250, 250, 250);
+        doc.rect(20, yPos - 2, pageWidth - 40, 8, "F");
+      }
+      rowData.forEach((data, colIndex) => {
+        if (colIndex === 0) {
+          doc.text(data, xPos + 2, yPos + 2);
+        } else {
+          doc.text(data, xPos + colWidths[colIndex] / 2, yPos + 2, { align: "center" });
+        }
+        xPos += colWidths[colIndex];
+      });
+      yPos += 8;
+    });
+    doc.setFillColor(41, 128, 185);
+    doc.rect(20, yPos, pageWidth - 40, 10, "F");
+    doc.setFont("helvetica", "bold");
+    doc.setTextColor(255, 255, 255);
+    doc.text("TOTAL CONSOLIDADO:", 22, yPos + 6);
+    doc.text(`R$ ${totalGeral.toFixed(2)}`, pageWidth - 35, yPos + 6, { align: "center" });
+    yPos += 20;
+    addNewPage();
+    doc.setFontSize(14);
+    doc.setFont("helvetica", "bold");
+    doc.setTextColor(41, 128, 185);
+    doc.text("DETALHAMENTO POR LOJA", pageWidth / 2, yPos, { align: "center" });
+    yPos += 15;
+    relatorioLojas.forEach((grupo, lojaIndex) => {
+      checkNewPage(100);
+      doc.setFillColor(245, 245, 245);
+      doc.rect(20, yPos - 5, pageWidth - 40, 25, "F");
+      doc.setDrawColor(180, 180, 180);
+      doc.rect(20, yPos - 5, pageWidth - 40, 25);
+      doc.setFontSize(12);
+      doc.setFont("helvetica", "bold");
+      doc.setTextColor(0, 0, 0);
+      doc.text(`${lojaIndex + 1}. ${grupo.loja.nome}`, 25, yPos + 3);
+      doc.setFontSize(8);
+      doc.setFont("helvetica", "normal");
+      doc.text(`CNPJ: ${grupo.loja.cnpj}`, 25, yPos + 10);
+      doc.text(`Contato: ${grupo.loja.contato}`, 25, yPos + 15);
+      doc.text(`Total: R$ ${grupo.totais.final.toFixed(2)}`, pageWidth - 50, yPos + 8);
+      yPos += 30;
+      doc.setFontSize(10);
+      doc.setFont("helvetica", "bold");
+      doc.text("Composi\xE7\xE3o Financeira:", 25, yPos);
+      yPos += 8;
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(8);
+      doc.text(`\u2022 Log\xEDstica (${grupo.motoboys.length} motoboys): R$ ${grupo.totais.liquido.toFixed(2)}`, 30, yPos);
+      yPos += 6;
+      doc.text(`\u2022 Taxa Administrativa: R$ ${grupo.totais.taxaAdmin.toFixed(2)} ${grupo.loja.usarTaxaPercentual && grupo.totais.liquido > (grupo.loja.limiteValorFixo || 0) ? `(${grupo.loja.percentualTaxa}%)` : "(fixa)"}`, 30, yPos);
+      yPos += 6;
+      doc.text(`\u2022 Taxa Supervis\xE3o: R$ ${grupo.totais.taxaSupervisao.toFixed(2)}`, 30, yPos);
+      yPos += 6;
+      doc.text(`\u2022 D\xE9bitos Pendentes: R$ ${grupo.totais.debitos.toFixed(2)} (${grupo.debitos.length} item(s))`, 30, yPos);
+      yPos += 10;
+      doc.setFontSize(9);
+      doc.setFont("helvetica", "bold");
+      doc.text("Motoboys:", 25, yPos);
+      yPos += 8;
+      grupo.motoboys.forEach((motoboy) => {
+        checkNewPage(6);
+        doc.setFontSize(7);
+        doc.setFont("helvetica", "normal");
+        doc.text(`\u2022 ${motoboy.motoboy.nome}: Di\xE1ria R$ ${motoboy.valorDiaria.toFixed(2)} + Corridas R$ ${motoboy.totalCorridas.toFixed(2)} = R$ ${motoboy.totalLiquido.toFixed(2)}`, 30, yPos);
+        yPos += 5;
+      });
+      if (lojaIndex < relatorioLojas.length - 1) {
+        yPos += 10;
+        doc.setDrawColor(200, 200, 200);
+        doc.line(20, yPos, pageWidth - 20, yPos);
+        yPos += 15;
+      }
+    });
+    const addFooter = () => {
+      doc.setFontSize(8);
+      doc.setFont("helvetica", "normal");
+      doc.setTextColor(100, 100, 100);
+      doc.setDrawColor(200, 200, 200);
+      doc.line(20, pageHeight - 20, pageWidth - 20, pageHeight - 20);
+      doc.text("Expresso Neves - Relat\xF3rio Consolidado", 20, pageHeight - 15);
+      doc.text(`P\xE1gina ${doc.internal.getCurrentPageInfo().pageNumber}`, pageWidth - 20, pageHeight - 15, { align: "right" });
+      doc.text(`Gerado em: ${(/* @__PURE__ */ new Date()).toLocaleString("pt-BR")}`, pageWidth / 2, pageHeight - 15, { align: "center" });
+    };
+    const totalPages = doc.internal.getNumberOfPages();
+    for (let i = 1; i <= totalPages; i++) {
+      doc.setPage(i);
+      addFooter();
+    }
+    const dataInicioFormatada = relatorioLojas[0].periodo.inicio.replace(/-/g, "");
+    const dataFimFormatada = relatorioLojas[0].periodo.fim.replace(/-/g, "");
+    const nomeArquivo = `relatorio-consolidado-${dataInicioFormatada}-${dataFimFormatada}.pdf`;
+    doc.save(nomeArquivo);
+    toast.success("Relat\xF3rio consolidado exportado com sucesso!");
+  };
+  const gerarRelatorioMotoboys = () => {
+    if (!relatorioMotoboyConfig.dataInicio || !relatorioMotoboyConfig.dataFim) {
+      toast.error("Selecione as datas de in\xEDcio e fim do per\xEDodo!");
+      return;
+    }
+    if (relatorioMotoboyConfig.dataInicio > relatorioMotoboyConfig.dataFim) {
+      toast.error("A data de in\xEDcio deve ser menor ou igual \xE0 data de fim!");
+      return;
+    }
+    const dataInicio = relatorioMotoboyConfig.dataInicio;
+    const dataFim = relatorioMotoboyConfig.dataFim;
+    const jornadasParaProcessar = getJornadasFiltradas();
+    const adiantamentosParaProcessar = getAdiantamentosFiltrados();
+    const lojasParaProcessar = getLojasFiltradas();
+    console.log("\u{1F464} === RELAT\xD3RIO MOTOBOYS ===");
+    console.log("\u{1F464} Per\xEDodo selecionado:", { dataInicio, dataFim });
+    console.log("\u{1F464} Usu\xE1rio logado:", currentUser?.tipo, currentUser?.lojaId);
+    const jornadasPeriodo = jornadasParaProcessar.filter((j) => {
+      return j.data >= dataInicio && j.data <= dataFim;
+    });
+    console.log("\u{1F464} Jornadas do per\xEDodo:", jornadasPeriodo.length);
+    const relatoriosPorLoja = lojasParaProcessar.map((loja) => {
+      const jornadasLoja = jornadasPeriodo.filter((j) => j.lojaId === loja.id);
+      if (jornadasLoja.length === 0) {
+        return null;
+      }
+      const motoboysDaLoja = {};
+      jornadasLoja.forEach((jornada) => {
+        const motoboyId = jornada.motoboyId;
+        const motoboy = motoboys.find((m) => m.id === motoboyId);
+        if (!motoboy) return;
+        if (!motoboysDaLoja[motoboyId]) {
+          motoboysDaLoja[motoboyId] = {
+            motoboy,
+            jornadas: [],
+            totalDiaria: 0,
+            totalCorridas: 0,
+            totalComissoes: 0,
+            totalMissoes: 0,
+            totalDescontos: 0,
+            totalAdiantamentos: 0,
+            totalBruto: 0,
+            totalLiquido: 0
+          };
+        }
+        const motoboyData = motoboysDaLoja[motoboyId];
+        motoboyData.jornadas.push(jornada);
+        motoboyData.totalDiaria += jornada.valorDiaria || 0;
+        motoboyData.totalCorridas += jornada.valorCorridas || 0;
+        motoboyData.totalComissoes += jornada.comissoes || 0;
+        motoboyData.totalMissoes += jornada.missoes || 0;
+        motoboyData.totalDescontos += jornada.descontos || 0;
+      });
+      Object.values(motoboysDaLoja).forEach((motoboyData) => {
+        const periodoSemanaAtual = obterPeriodoSemanaAtual();
+        const adiantamentosDoMotoboy = adiantamentos.filter((a) => {
+          if (a.motoboyId !== motoboyData.motoboy.id || a.lojaId !== loja.id) return false;
+          const noPeriodoRelatorio = a.data >= dataInicio && a.data <= dataFim;
+          const naSemanaAtual = a.data >= periodoSemanaAtual.inicio && a.data <= periodoSemanaAtual.fim;
+          return noPeriodoRelatorio || naSemanaAtual;
+        });
+        motoboyData.totalAdiantamentos = adiantamentosDoMotoboy.reduce((sum, a) => sum + (a.valor || 0), 0);
+        motoboyData.totalBruto = motoboyData.totalDiaria + motoboyData.totalCorridas + motoboyData.totalComissoes + motoboyData.totalMissoes;
+        motoboyData.totalLiquido = motoboyData.totalBruto - motoboyData.totalDescontos - motoboyData.totalAdiantamentos;
+      });
+      return {
+        loja,
+        motoboys: Object.values(motoboysDaLoja),
+        periodo: {
+          inicio: dataInicio,
+          fim: dataFim
+        }
+      };
+    }).filter((relatorio) => relatorio !== null);
+    console.log("\u{1F464} Relat\xF3rios gerados:", relatoriosPorLoja.length);
+    setRelatorioMotoboyLojas(relatoriosPorLoja);
+  };
+  const gerarPDFMotoboys = (grupo) => {
+    const doc = new jsPDF();
+    const pageWidth = doc.internal.pageSize.width;
+    const pageHeight = doc.internal.pageSize.height;
+    let yPos = 30;
+    const addNewPage = () => {
+      doc.addPage();
+      yPos = 30;
+      addHeaderToPage();
+    };
+    const checkNewPage = (requiredHeight) => {
+      if (yPos + requiredHeight > pageHeight - 30) {
+        addNewPage();
+      }
+    };
+    const addHeaderToPage = () => {
+      doc.setFontSize(18);
+      doc.setFont("helvetica", "bold");
+      doc.setTextColor(0, 0, 0);
+      doc.text("EXPRESSO NEVES", pageWidth / 2, 20, { align: "center" });
+      doc.setLineWidth(0.5);
+      doc.line(20, 25, pageWidth - 20, 25);
+      yPos = 35;
+    };
+    addHeaderToPage();
+    doc.setFontSize(14);
+    doc.setFont("helvetica", "bold");
+    doc.setTextColor(41, 128, 185);
+    doc.text("RELAT\xD3RIO DETALHADO DE MOTOBOYS", pageWidth / 2, yPos, { align: "center" });
+    yPos += 15;
+    doc.setFontSize(12);
+    doc.setFont("helvetica", "bold");
+    doc.setTextColor(0, 0, 0);
+    doc.text("DADOS DA LOJA:", 20, yPos);
+    yPos += 8;
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(10);
+    doc.text(`Nome: ${grupo.loja.nome}`, 25, yPos);
+    yPos += 6;
+    doc.text(`CNPJ: ${grupo.loja.cnpj}`, 25, yPos);
+    yPos += 6;
+    doc.text(`Contato: ${grupo.loja.contato}`, 25, yPos);
+    yPos += 6;
+    doc.text(`Per\xEDodo: ${(/* @__PURE__ */ new Date(grupo.periodo.inicio + "T12:00:00")).toLocaleDateString("pt-BR")} at\xE9 ${(/* @__PURE__ */ new Date(grupo.periodo.fim + "T12:00:00")).toLocaleDateString("pt-BR")}`, 25, yPos);
+    yPos += 6;
+    doc.text(`Data de Emiss\xE3o: ${(/* @__PURE__ */ new Date()).toLocaleDateString("pt-BR")} \xE0s ${(/* @__PURE__ */ new Date()).toLocaleTimeString("pt-BR")}`, 25, yPos);
+    yPos += 15;
+    checkNewPage(50);
+    doc.setFillColor(240, 248, 255);
+    doc.rect(20, yPos - 5, pageWidth - 40, 45, "F");
+    doc.setDrawColor(41, 128, 185);
+    doc.rect(20, yPos - 5, pageWidth - 40, 45);
+    doc.setFontSize(11);
+    doc.setFont("helvetica", "bold");
+    doc.setTextColor(41, 128, 185);
+    doc.text("RESUMO EXECUTIVO", 25, yPos + 5);
+    const totalJornadas = grupo.motoboys.reduce((sum, mb) => sum + mb.jornadas.length, 0);
+    const totalDiarias = grupo.motoboys.reduce((sum, mb) => sum + mb.totalDiaria, 0);
+    const totalCorridas = grupo.motoboys.reduce((sum, mb) => sum + mb.totalCorridas, 0);
+    const totalAdiantamentos = grupo.motoboys.reduce((sum, mb) => sum + mb.totalAdiantamentos, 0);
+    const totalLiquido = grupo.motoboys.reduce((sum, mb) => sum + mb.totalLiquido, 0);
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(10);
+    doc.setTextColor(0, 0, 0);
+    doc.text(`Motoboys que trabalharam: ${grupo.motoboys.length}`, 25, yPos + 15);
+    doc.text(`Total de Jornadas: ${totalJornadas}`, 25, yPos + 23);
+    doc.text(`Total Di\xE1rias: R$ ${totalDiarias.toFixed(2)}`, 25, yPos + 31);
+    doc.text(`Total Corridas: R$ ${totalCorridas.toFixed(2)}`, 100, yPos + 15);
+    doc.text(`Total Adiantamentos: R$ ${totalAdiantamentos.toFixed(2)}`, 100, yPos + 23);
+    doc.text(`Total L\xEDquido: R$ ${totalLiquido.toFixed(2)}`, 100, yPos + 31);
+    yPos += 55;
+    checkNewPage(50);
+    doc.setFontSize(12);
+    doc.setFont("helvetica", "bold");
+    doc.setTextColor(0, 0, 0);
+    doc.text("DETALHAMENTO POR MOTOBOY:", 20, yPos);
+    yPos += 10;
+    doc.setFontSize(10);
+    doc.setFont("helvetica", "bold");
+    doc.text("DADOS SEMANAIS DE CORRIDAS:", 20, yPos);
+    yPos += 8;
+    doc.setFontSize(8);
+    doc.text("MOTOBOY", 20, yPos);
+    doc.text("SEG", 55, yPos);
+    doc.text("TER", 70, yPos);
+    doc.text("QUA", 85, yPos);
+    doc.text("QUI", 100, yPos);
+    doc.text("SEX", 115, yPos);
+    doc.text("SAB", 130, yPos);
+    doc.text("DOM", 145, yPos);
+    yPos += 6;
+    doc.line(20, yPos, 160, yPos);
+    yPos += 3;
+    grupo.motoboys.forEach((motoboyData) => {
+      checkNewPage(8);
+      const jornadasPorDia = {};
+      motoboyData.jornadas.forEach((jornada) => {
+        const data = /* @__PURE__ */ new Date(jornada.data + "T12:00:00");
+        const diaSemana = data.getDay();
+        jornadasPorDia[diaSemana] = jornada;
+      });
+      doc.setFontSize(7);
+      doc.text(motoboyData.motoboy.nome.substring(0, 14), 20, yPos);
+      const diasPosicoes = [55, 70, 85, 100, 115, 130, 145];
+      [1, 2, 3, 4, 5, 6, 0].forEach((dia, index) => {
+        const jornada = jornadasPorDia[dia];
+        if (jornada) {
+          const valorCorridas = jornada.valorCorridas || 0;
+          doc.setTextColor(0, 150, 0);
+          doc.text(`${valorCorridas.toFixed(0)}`, diasPosicoes[index], yPos, { align: "center" });
+          doc.setTextColor(0, 0, 0);
+        } else {
+          doc.text("-", diasPosicoes[index], yPos, { align: "center" });
+        }
+      });
+      yPos += 6;
+    });
+    yPos += 10;
+    checkNewPage(40);
+    doc.setFontSize(10);
+    doc.setFont("helvetica", "bold");
+    doc.text("VALORES CONSOLIDADOS:", 20, yPos);
+    yPos += 8;
+    doc.setFontSize(8);
+    doc.text("MOTOBOY", 20, yPos);
+    doc.text("DI\xC1RIA", 48, yPos);
+    doc.text("TAXA", 68, yPos);
+    doc.text("MISS\xD5ES", 86, yPos);
+    doc.text("DESCONTOS", 108, yPos);
+    doc.text("ADIANT.", 132, yPos);
+    doc.text("TOTAL", 154, yPos);
+    yPos += 6;
+    doc.line(20, yPos, 170, yPos);
+    yPos += 3;
+    grupo.motoboys.forEach((motoboyData) => {
+      checkNewPage(8);
+      doc.setFontSize(7);
+      doc.text(motoboyData.motoboy.nome.substring(0, 12), 20, yPos);
+      doc.text(`${motoboyData.totalDiaria.toFixed(0)}`, 48, yPos);
+      doc.text(`${motoboyData.totalCorridas.toFixed(0)}`, 68, yPos);
+      doc.text(`${(motoboyData.totalComissoes + motoboyData.totalMissoes).toFixed(0)}`, 86, yPos);
+      doc.text(`${motoboyData.totalDescontos.toFixed(0)}`, 108, yPos);
+      doc.text(`${motoboyData.totalAdiantamentos.toFixed(0)}`, 132, yPos);
+      doc.text(`${motoboyData.totalLiquido.toFixed(0)}`, 154, yPos);
+      yPos += 6;
+    });
+    doc.setFillColor(240, 240, 240);
+    doc.rect(20, yPos, pageWidth - 40, 8, "F");
+    doc.setFont("helvetica", "bold");
+    doc.text("TOTAL MOTOBOYS", 22, yPos + 5);
+    doc.text(`R$ ${totalLiquido.toFixed(2)}`, 154, yPos + 5);
+    yPos += 20;
+    checkNewPage(60);
+    doc.setFontSize(12);
+    doc.setFont("helvetica", "bold");
+    doc.text("AN\xC1LISE DETALHADA DOS MOTOBOYS:", 20, yPos);
+    yPos += 10;
+    grupo.motoboys.forEach((motoboyData, index) => {
+      checkNewPage(40);
+      doc.setFillColor(245, 245, 245);
+      doc.rect(20, yPos - 5, pageWidth - 40, 30, "F");
+      doc.setDrawColor(180, 180, 180);
+      doc.rect(20, yPos - 5, pageWidth - 40, 30);
+      doc.setFontSize(11);
+      doc.setFont("helvetica", "bold");
+      doc.setTextColor(0, 0, 0);
+      doc.text(`${index + 1}. ${motoboyData.motoboy.nome}`, 25, yPos + 3);
+      doc.setFontSize(8);
+      doc.setFont("helvetica", "normal");
+      doc.text(`Jornadas realizadas: ${motoboyData.jornadas.length}`, 25, yPos + 10);
+      doc.text(`Performance: ${(motoboyData.totalLiquido / motoboyData.jornadas.length).toFixed(2)} por jornada`, 25, yPos + 16);
+      doc.text(`Total L\xEDquido: R$ ${motoboyData.totalLiquido.toFixed(2)}`, pageWidth - 50, yPos + 8);
+      yPos += 35;
+      doc.setFontSize(9);
+      doc.setFont("helvetica", "bold");
+      doc.text("Breakdown Financeiro:", 25, yPos);
+      yPos += 8;
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(8);
+      doc.text(`\u2022 Di\xE1rias: R$ ${motoboyData.totalDiaria.toFixed(2)}`, 30, yPos);
+      yPos += 5;
+      doc.text(`\u2022 Corridas: R$ ${motoboyData.totalCorridas.toFixed(2)}`, 30, yPos);
+      yPos += 5;
+      doc.text(`\u2022 Comiss\xF5es: R$ ${motoboyData.totalComissoes.toFixed(2)}`, 30, yPos);
+      yPos += 5;
+      doc.text(`\u2022 Miss\xF5es: R$ ${motoboyData.totalMissoes.toFixed(2)}`, 30, yPos);
+      yPos += 5;
+      doc.text(`\u2022 Descontos: R$ ${motoboyData.totalDescontos.toFixed(2)}`, 30, yPos);
+      yPos += 5;
+      doc.text(`\u2022 Adiantamentos: R$ ${motoboyData.totalAdiantamentos.toFixed(2)}`, 30, yPos);
+      yPos += 5;
+      doc.setFont("helvetica", "bold");
+      doc.text(`\u2022 Total L\xEDquido: R$ ${motoboyData.totalLiquido.toFixed(2)}`, 30, yPos);
+      yPos += 15;
+      if (index < grupo.motoboys.length - 1) {
+        doc.setDrawColor(200, 200, 200);
+        doc.line(20, yPos, pageWidth - 20, yPos);
+        yPos += 10;
+      }
+    });
+    const addFooter = () => {
+      doc.setFontSize(8);
+      doc.setFont("helvetica", "normal");
+      doc.setTextColor(100, 100, 100);
+      doc.setDrawColor(200, 200, 200);
+      doc.line(20, pageHeight - 20, pageWidth - 20, pageHeight - 20);
+      doc.text("Expresso Neves - Relat\xF3rio Detalhado de Motoboys", 20, pageHeight - 15);
+      doc.text(`P\xE1gina ${doc.internal.getCurrentPageInfo().pageNumber}`, pageWidth - 20, pageHeight - 15, { align: "right" });
+      doc.text(`Gerado em: ${(/* @__PURE__ */ new Date()).toLocaleString("pt-BR")}`, pageWidth / 2, pageHeight - 15, { align: "center" });
+    };
+    const totalPages = doc.internal.getNumberOfPages();
+    for (let i = 1; i <= totalPages; i++) {
+      doc.setPage(i);
+      addFooter();
+    }
+    const dataInicioFormatada = grupo.periodo.inicio.replace(/-/g, "");
+    const dataFimFormatada = grupo.periodo.fim.replace(/-/g, "");
+    const nomeArquivo = `relatorio-motoboys-${grupo.loja.nome.replace(/[^a-zA-Z0-9]/g, "-").toLowerCase()}-${dataInicioFormatada}-${dataFimFormatada}.pdf`;
+    doc.save(nomeArquivo);
+  };
+  const gerarPDFTodosMotoboys = () => {
+    if (relatorioMotoboyLojas.length === 0) {
+      toast.error("Nenhum relat\xF3rio dispon\xEDvel para exportar!");
+      return;
+    }
+    const doc = new jsPDF();
+    const pageHeight = doc.internal.pageSize.height;
+    const pageWidth = doc.internal.pageSize.width;
+    let yPos = 20;
+    let currentPage = 1;
+    const addNewPage = () => {
+      doc.addPage();
+      currentPage++;
+      yPos = 20;
+    };
+    const checkNewPage = (requiredHeight) => {
+      if (yPos + requiredHeight > pageHeight - 20) {
+        addNewPage();
+      }
+    };
+    doc.setFontSize(16);
+    doc.text("RELAT\xD3RIO CONSOLIDADO MOTOBOYS - EXPRESSO NEVES", 20, yPos);
+    yPos += 10;
+    if (relatorioMotoboyLojas.length > 0) {
+      doc.setFontSize(10);
+      doc.text(`Per\xEDodo: ${(/* @__PURE__ */ new Date(relatorioMotoboyLojas[0].periodo.inicio + "T12:00:00")).toLocaleDateString("pt-BR")} at\xE9 ${(/* @__PURE__ */ new Date(relatorioMotoboyLojas[0].periodo.fim + "T12:00:00")).toLocaleDateString("pt-BR")}`, 20, yPos);
+      yPos += 10;
+      doc.text(`Gerado em: ${(/* @__PURE__ */ new Date()).toLocaleString("pt-BR")}`, 20, yPos);
+      yPos += 15;
+    }
+    const totalMotoboyUnicos = relatorioMotoboyLojas.reduce((total, loja) => {
+      const uniqueMotoboys = /* @__PURE__ */ new Set();
+      loja.motoboys.forEach((mb) => uniqueMotoboys.add(mb.motoboy.id));
+      return total + uniqueMotoboys.size;
+    }, 0);
+    const totalJornadas = relatorioMotoboyLojas.reduce((total, loja) => total + loja.motoboys.reduce((subTotal, mb) => subTotal + mb.jornadas.length, 0), 0);
+    const totalDiarias = relatorioMotoboyLojas.reduce((total, loja) => total + loja.motoboys.reduce((subTotal, mb) => subTotal + mb.totalDiaria, 0), 0);
+    const totalCorridas = relatorioMotoboyLojas.reduce((total, loja) => total + loja.motoboys.reduce((subTotal, mb) => subTotal + mb.totalCorridas, 0), 0);
+    const totalAdiantamentos = relatorioMotoboyLojas.reduce((total, loja) => total + loja.motoboys.reduce((subTotal, mb) => subTotal + mb.totalAdiantamentos, 0), 0);
+    const totalLiquido = relatorioMotoboyLojas.reduce((total, loja) => total + loja.motoboys.reduce((subTotal, mb) => subTotal + mb.totalLiquido, 0), 0);
+    doc.setFontSize(12);
+    doc.text("RESUMO GERAL:", 20, yPos);
+    yPos += 8;
+    doc.setFontSize(10);
+    doc.text(`Total de Lojas: ${relatorioMotoboyLojas.length}`, 20, yPos);
+    yPos += 6;
+    doc.text(`Total de Motoboys: ${totalMotoboyUnicos}`, 20, yPos);
+    yPos += 6;
+    doc.text(`Total de Jornadas: ${totalJornadas}`, 20, yPos);
+    yPos += 6;
+    doc.text(`Total Di\xE1rias: R$ ${totalDiarias.toFixed(2)}`, 20, yPos);
+    yPos += 6;
+    doc.text(`Total Corridas: R$ ${totalCorridas.toFixed(2)}`, 20, yPos);
+    yPos += 6;
+    doc.text(`Total Adiantamentos: R$ ${totalAdiantamentos.toFixed(2)}`, 20, yPos);
+    yPos += 6;
+    doc.setFontSize(12);
+    doc.text(`TOTAL L\xCDQUIDO: R$ ${totalLiquido.toFixed(2)}`, 20, yPos);
+    yPos += 20;
+    relatorioMotoboyLojas.forEach((grupo, lojaIndex) => {
+      checkNewPage(80);
+      doc.setFontSize(14);
+      doc.text(`${lojaIndex + 1}. ${grupo.loja.nome}`, 20, yPos);
+      yPos += 8;
+      doc.setFontSize(9);
+      doc.text(`CNPJ: ${grupo.loja.cnpj}`, 20, yPos);
+      yPos += 5;
+      doc.text(`Contato: ${grupo.loja.contato}`, 20, yPos);
+      yPos += 5;
+      doc.text(`${grupo.motoboys.length} motoboy(s) trabalharam nesta loja`, 20, yPos);
+      yPos += 8;
+      doc.setFontSize(8);
+      doc.text("MOTOBOY", 20, yPos);
+      doc.text("SEG", 50, yPos);
+      doc.text("TER", 60, yPos);
+      doc.text("QUA", 70, yPos);
+      doc.text("QUI", 80, yPos);
+      doc.text("SEX", 90, yPos);
+      doc.text("SAB", 100, yPos);
+      doc.text("DOM", 110, yPos);
+      doc.text("DI\xC1RIA", 120, yPos);
+      doc.text("TAXA", 135, yPos);
+      doc.text("MISS\xD5ES", 150, yPos);
+      doc.text("DESCONTOS", 165, yPos);
+      doc.text("ADIANT.", 180, yPos);
+      doc.text("TOTAL", 190, yPos);
+      yPos += 6;
+      doc.line(20, yPos, 200, yPos);
+      yPos += 3;
+      doc.setFontSize(7);
+      doc.setFont("helvetica", "normal");
+      doc.setTextColor(100, 100, 100);
+      doc.text("Legenda: C: = Corridas (verde) | D: = Di\xE1rias (azul)", 20, yPos);
+      yPos += 5;
+      grupo.motoboys.forEach((motoboyData) => {
+        checkNewPage(8);
+        const jornadasPorDia = {};
+        motoboyData.jornadas.forEach((jornada) => {
+          const data = /* @__PURE__ */ new Date(jornada.data + "T12:00:00");
+          const diaSemana = data.getDay();
+          jornadasPorDia[diaSemana] = jornada;
+        });
+        doc.setFontSize(7);
+        doc.text(motoboyData.motoboy.nome.substring(0, 12), 20, yPos);
+        const diasPosicoes = [50, 60, 70, 80, 90, 100, 110];
+        [1, 2, 3, 4, 5, 6, 0].forEach((dia, index) => {
+          const jornada = jornadasPorDia[dia];
+          if (jornada) {
+            const valorCorridas = jornada.valorCorridas || 0;
+            doc.setTextColor(0, 150, 0);
+            doc.text(`${valorCorridas.toFixed(0)}`, diasPosicoes[index], yPos, { align: "center" });
+            doc.setTextColor(0, 0, 0);
+          } else {
+            doc.text("-", diasPosicoes[index], yPos, { align: "center" });
+          }
+        });
+        doc.text(`${motoboyData.totalDiaria.toFixed(2)}`, 120, yPos);
+        doc.text(`${motoboyData.totalCorridas.toFixed(2)}`, 135, yPos);
+        doc.text(`${(motoboyData.totalComissoes + motoboyData.totalMissoes).toFixed(2)}`, 150, yPos);
+        doc.text(`${motoboyData.totalDescontos.toFixed(2)}`, 165, yPos);
+        doc.text(`${motoboyData.totalAdiantamentos.toFixed(2)}`, 180, yPos);
+        doc.text(`${motoboyData.totalLiquido.toFixed(2)}`, 190, yPos);
+        yPos += 6;
+      });
+      doc.line(20, yPos, 200, yPos);
+      yPos += 3;
+      doc.setFontSize(8);
+      doc.text("TOTAL MOTOBOYS", 20, yPos);
+      doc.text(`R$ ${grupo.motoboys.reduce((sum, mb) => sum + mb.totalLiquido, 0).toFixed(2)}`, 190, yPos);
+      yPos += 10;
+      doc.setFontSize(9);
+      doc.text("RESUMO DA LOJA:", 20, yPos);
+      yPos += 6;
+      doc.setFontSize(8);
+      doc.text(`Total Di\xE1rias: R$ ${grupo.motoboys.reduce((sum, mb) => sum + mb.totalDiaria, 0).toFixed(2)}`, 20, yPos);
+      yPos += 5;
+      doc.text(`Total Corridas: R$ ${grupo.motoboys.reduce((sum, mb) => sum + mb.totalCorridas, 0).toFixed(2)}`, 20, yPos);
+      yPos += 5;
+      doc.text(`Total Extras: R$ ${grupo.motoboys.reduce((sum, mb) => sum + mb.totalComissoes + mb.totalMissoes, 0).toFixed(2)}`, 20, yPos);
+      yPos += 5;
+      doc.text(`Total Adiantamentos: R$ ${grupo.motoboys.reduce((sum, mb) => sum + mb.totalAdiantamentos, 0).toFixed(2)}`, 20, yPos);
+      yPos += 15;
+      if (lojaIndex < relatorioMotoboyLojas.length - 1) {
+        yPos += 5;
+        doc.line(20, yPos, 200, yPos);
+        yPos += 10;
+      }
+    });
+    const dataInicioFormatada = relatorioMotoboyLojas[0].periodo.inicio.replace(/-/g, "");
+    const dataFimFormatada = relatorioMotoboyLojas[0].periodo.fim.replace(/-/g, "");
+    doc.save(`relatorio-motoboys-consolidado-${dataInicioFormatada}-${dataFimFormatada}.pdf`);
+  };
+  if (!currentUser) {
+    return /* @__PURE__ */ React.createElement("div", { className: "min-h-screen bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center p-4" }, /* @__PURE__ */ React.createElement("div", { className: "bg-white rounded-lg shadow-xl p-8 w-full max-w-md" }, /* @__PURE__ */ React.createElement("div", { className: "text-center mb-8" }, /* @__PURE__ */ React.createElement("h1", { className: "text-3xl font-bold text-gray-800 mb-2" }, "Expresso Neves"), /* @__PURE__ */ React.createElement("p", { className: "text-gray-600" }, "Sistema de Gest\xE3o de Motoboy")), /* @__PURE__ */ React.createElement("form", { onSubmit: handleLogin, className: "space-y-6" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("label", { className: "block text-sm font-medium text-gray-700 mb-2" }, "Email"), /* @__PURE__ */ React.createElement(
+      "input",
+      {
+        type: "email",
+        value: loginForm.email,
+        onChange: (e) => setLoginForm({ ...loginForm, email: e.target.value }),
+        className: "w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500",
+        required: true
+      }
+    )), /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("label", { className: "block text-sm font-medium text-gray-700 mb-2" }, "Senha"), /* @__PURE__ */ React.createElement(
+      "input",
+      {
+        type: "password",
+        value: loginForm.senha,
+        onChange: (e) => setLoginForm({ ...loginForm, senha: e.target.value }),
+        className: "w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500",
+        required: true
+      }
+    )), /* @__PURE__ */ React.createElement(
+      "button",
+      {
+        type: "submit",
+        className: "w-full bg-blue-600 text-white py-2 px-4 rounded-md hover:bg-blue-700 transition-colors"
+      },
+      "Entrar"
+    )), /* @__PURE__ */ React.createElement("div", { className: "mt-6 text-center text-sm text-gray-600" }, /* @__PURE__ */ React.createElement("p", null, "Usu\xE1rio padr\xE3o:"), /* @__PURE__ */ React.createElement("p", null, "Email: admin@expressoneves.com"), /* @__PURE__ */ React.createElement("p", null, "Senha: admin123"))));
+  }
+  return /* @__PURE__ */ React.createElement("div", { className: "min-h-screen bg-gray-100" }, /* @__PURE__ */ React.createElement("header", { className: "bg-white shadow-sm border-b" }, /* @__PURE__ */ React.createElement("div", { className: "max-w-7xl mx-auto px-4 sm:px-6 lg:px-8" }, /* @__PURE__ */ React.createElement("div", { className: "flex justify-between items-center py-4" }, /* @__PURE__ */ React.createElement("div", { className: "flex items-center" }, /* @__PURE__ */ React.createElement("h1", { className: "text-2xl font-bold text-gray-900" }, "Expresso Neves"), /* @__PURE__ */ React.createElement("p", { className: "ml-4 text-sm text-gray-600" }, "Sistema de Gest\xE3o de Motoboy")), /* @__PURE__ */ React.createElement("div", { className: "flex items-center gap-4" }, /* @__PURE__ */ React.createElement("span", { className: "text-sm text-gray-600" }, currentUser.tipo), /* @__PURE__ */ React.createElement(
+    "button",
+    {
+      onClick: handleLogout,
+      className: "bg-gray-600 text-white px-4 py-2 rounded-md hover:bg-gray-700 transition-colors text-sm"
+    },
+    "Sair"
+  ))))), /* @__PURE__ */ React.createElement("div", { className: "flex" }, /* @__PURE__ */ React.createElement("nav", { className: "w-64 bg-red-800 text-white min-h-screen" }, /* @__PURE__ */ React.createElement("div", { className: "p-4" }, /* @__PURE__ */ React.createElement("div", { className: "text-center mb-8" }, /* @__PURE__ */ React.createElement("div", { className: "bg-white text-red-800 rounded-lg p-3 mb-2" }, /* @__PURE__ */ React.createElement("h2", { className: "font-bold text-lg" }, "Expresso Neves"), /* @__PURE__ */ React.createElement("p", { className: "text-xs" }, "Sistema de Gest\xE3o de Motoboy"))), /* @__PURE__ */ React.createElement("ul", { className: "space-y-2" }, [
+    { id: "dashboard", label: "Dashboard", allowed: ["admin", "financeiro", "lojista"] },
+    { id: "motoboys", label: "Motoboys", allowed: ["admin", "financeiro"] },
+    { id: "lojas", label: "Lojas", allowed: ["admin"] },
+    { id: "jornadas", label: "Jornadas", allowed: ["admin", "financeiro", "lojista"] },
+    { id: "adiantamentos", label: "Adiantamentos", allowed: ["admin", "financeiro"] },
+    { id: "debitos", label: "D\xE9bitos Pendentes", allowed: ["admin", "financeiro"] },
+    { id: "relatorios", label: "Relat\xF3rio Lojas", allowed: ["admin", "financeiro", "lojista"] },
+    { id: "relatorio-motoboys", label: "Relat\xF3rio Motoboys", allowed: ["admin", "financeiro"] },
+    { id: "pdr", label: "PDR", allowed: ["admin"] },
+    { id: "colaboradores", label: "Colaboradores", allowed: ["admin"] }
+  ].map((tab) => tab.allowed.includes(currentUser.tipo) && /* @__PURE__ */ React.createElement("li", { key: tab.id }, /* @__PURE__ */ React.createElement(
+    "button",
+    {
+      onClick: () => setActiveTab(tab.id),
+      className: `w-full text-left px-4 py-2 rounded-md transition-colors text-sm ${activeTab === tab.id ? "bg-red-700 text-white font-medium" : "text-red-100 hover:bg-red-700 hover:text-white"}`
+    },
+    tab.label
+  )))))), /* @__PURE__ */ React.createElement("main", { className: "flex-1 p-8" }, activeTab === "dashboard" && /* @__PURE__ */ React.createElement("div", { className: "space-y-6" }, /* @__PURE__ */ React.createElement("div", { className: "flex justify-between items-center" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("h2", { className: "text-3xl font-bold text-gray-900" }, "Dashboard"), /* @__PURE__ */ React.createElement("p", { className: "text-gray-600" }, "Vis\xE3o geral da opera\xE7\xE3o Expresso Neves")), /* @__PURE__ */ React.createElement("div", { className: "flex items-center gap-4" }, /* @__PURE__ */ React.createElement("div", { className: "flex items-center gap-2" }, /* @__PURE__ */ React.createElement("span", { className: "text-sm text-gray-600" }, "Per\xEDodo:"), /* @__PURE__ */ React.createElement(
+    "input",
+    {
+      type: "date",
+      value: relatorioConfig.dataInicio,
+      onChange: (e) => setRelatorioConfig({ ...relatorioConfig, dataInicio: e.target.value }),
+      className: "px-2 py-1 border border-gray-300 rounded text-sm"
+    }
+  ), /* @__PURE__ */ React.createElement("span", { className: "text-sm text-gray-600" }, "at\xE9"), /* @__PURE__ */ React.createElement(
+    "input",
+    {
+      type: "date",
+      value: relatorioConfig.dataFim,
+      onChange: (e) => setRelatorioConfig({ ...relatorioConfig, dataFim: e.target.value }),
+      className: "px-2 py-1 border border-gray-300 rounded text-sm"
+    }
+  )))), /* @__PURE__ */ React.createElement("div", { className: "grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6" }, /* @__PURE__ */ React.createElement("div", { className: "bg-gradient-to-r from-blue-500 to-blue-600 text-white rounded-lg p-6 shadow-lg" }, /* @__PURE__ */ React.createElement("div", { className: "flex items-center justify-between" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("h3", { className: "text-sm font-medium opacity-90" }, "Faturamento Total"), /* @__PURE__ */ React.createElement("p", { className: "text-2xl font-bold mt-1" }, "R$ ", relatorioConfig.dataInicio && relatorioConfig.dataFim ? getJornadasFiltradas().filter((j) => j.data >= relatorioConfig.dataInicio && j.data <= relatorioConfig.dataFim).reduce((sum, j) => sum + (j.valorDiaria || 0) + (j.valorCorridas || 0) + (j.comissoes || 0) + (j.missoes || 0), 0).toFixed(2) : "0,00")), /* @__PURE__ */ React.createElement("div", { className: "text-3xl opacity-80" }, "\u{1F4B0}")), /* @__PURE__ */ React.createElement("div", { className: "mt-4 flex items-center text-sm" }, /* @__PURE__ */ React.createElement("span", { className: "opacity-80" }, "Di\xE1rias + Corridas + Extras"))), /* @__PURE__ */ React.createElement("div", { className: "bg-gradient-to-r from-green-500 to-green-600 text-white rounded-lg p-6 shadow-lg" }, /* @__PURE__ */ React.createElement("div", { className: "flex items-center justify-between" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("h3", { className: "text-sm font-medium opacity-90" }, "Jornadas"), /* @__PURE__ */ React.createElement("p", { className: "text-2xl font-bold mt-1" }, relatorioConfig.dataInicio && relatorioConfig.dataFim ? getJornadasFiltradas().filter((j) => j.data >= relatorioConfig.dataInicio && j.data <= relatorioConfig.dataFim).length : 0)), /* @__PURE__ */ React.createElement("div", { className: "text-3xl opacity-80" }, "\u{1F4CA}")), /* @__PURE__ */ React.createElement("div", { className: "mt-4 flex items-center text-sm" }, /* @__PURE__ */ React.createElement("span", { className: "opacity-80" }, "Jornadas realizadas"))), /* @__PURE__ */ React.createElement("div", { className: "bg-gradient-to-r from-yellow-500 to-yellow-600 text-white rounded-lg p-6 shadow-lg" }, /* @__PURE__ */ React.createElement("div", { className: "flex items-center justify-between" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("h3", { className: "text-sm font-medium opacity-90" }, "Valor Corridas"), /* @__PURE__ */ React.createElement("p", { className: "text-2xl font-bold mt-1" }, "R$ ", relatorioConfig.dataInicio && relatorioConfig.dataFim ? getJornadasFiltradas().filter((j) => j.data >= relatorioConfig.dataInicio && j.data <= relatorioConfig.dataFim).reduce((sum, j) => sum + (j.valorCorridas || 0), 0).toFixed(2) : "0,00")), /* @__PURE__ */ React.createElement("div", { className: "text-3xl opacity-80" }, "\u{1F3CD}\uFE0F")), /* @__PURE__ */ React.createElement("div", { className: "mt-4 flex items-center text-sm" }, /* @__PURE__ */ React.createElement("span", { className: "opacity-80" }, "Receita de entregas"))), /* @__PURE__ */ React.createElement("div", { className: "bg-gradient-to-r from-purple-500 to-purple-600 text-white rounded-lg p-6 shadow-lg" }, /* @__PURE__ */ React.createElement("div", { className: "flex items-center justify-between" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("h3", { className: "text-sm font-medium opacity-90" }, "Motoboys Ativos"), /* @__PURE__ */ React.createElement("p", { className: "text-2xl font-bold mt-1" }, motoboys.filter((m) => m.status === "ativo").length)), /* @__PURE__ */ React.createElement("div", { className: "text-3xl opacity-80" }, "\u{1F465}")), /* @__PURE__ */ React.createElement("div", { className: "mt-4 flex items-center text-sm" }, /* @__PURE__ */ React.createElement("span", { className: "opacity-80" }, "Equipe dispon\xEDvel")))), /* @__PURE__ */ React.createElement("div", { className: "grid grid-cols-1 lg:grid-cols-2 gap-6" }, /* @__PURE__ */ React.createElement("div", { className: "bg-white rounded-lg shadow p-6" }, /* @__PURE__ */ React.createElement("h3", { className: "text-lg font-semibold text-gray-900 mb-4" }, "\u{1F4CA} Performance por Loja"), (() => {
+    const jornadasPeriodo = relatorioConfig.dataInicio && relatorioConfig.dataFim ? getJornadasFiltradas().filter((j) => j.data >= relatorioConfig.dataInicio && j.data <= relatorioConfig.dataFim) : [];
+    const dadosLojas = getLojasFiltradas().map((loja) => {
+      const jornadasLoja = jornadasPeriodo.filter((j) => j.lojaId === loja.id);
+      const totalFaturamento = jornadasLoja.reduce((sum, j) => sum + (j.valorDiaria || 0) + (j.valorCorridas || 0) + (j.comissoes || 0) + (j.missoes || 0), 0);
+      const totalJornadas = jornadasLoja.length;
+      return {
+        nome: loja.nome,
+        faturamento: totalFaturamento,
+        jornadas: totalJornadas
+      };
+    }).sort((a, b) => b.faturamento - a.faturamento);
+    const maxFaturamento = Math.max(...dadosLojas.map((d) => d.faturamento), 1);
+    return /* @__PURE__ */ React.createElement("div", { className: "space-y-4" }, dadosLojas.length > 0 ? /* @__PURE__ */ React.createElement(React.Fragment, null, /* @__PURE__ */ React.createElement("div", { className: "space-y-3" }, dadosLojas.map((loja, index) => /* @__PURE__ */ React.createElement("div", { key: index, className: "space-y-2" }, /* @__PURE__ */ React.createElement("div", { className: "flex justify-between items-center" }, /* @__PURE__ */ React.createElement("span", { className: "text-sm font-medium text-gray-700" }, loja.nome), /* @__PURE__ */ React.createElement("span", { className: "text-sm font-semibold text-gray-900" }, "R$ ", loja.faturamento.toFixed(2))), /* @__PURE__ */ React.createElement("div", { className: "flex items-center gap-2" }, /* @__PURE__ */ React.createElement("div", { className: "flex-1 bg-gray-200 rounded-full h-3" }, /* @__PURE__ */ React.createElement(
+      "div",
+      {
+        className: `h-3 rounded-full transition-all duration-300 ${index === 0 ? "bg-gradient-to-r from-yellow-400 to-yellow-500" : index === 1 ? "bg-gradient-to-r from-gray-400 to-gray-500" : index === 2 ? "bg-gradient-to-r from-orange-400 to-orange-500" : "bg-gradient-to-r from-blue-400 to-blue-500"}`,
+        style: { width: `${loja.faturamento / maxFaturamento * 100}%` }
+      }
+    )), /* @__PURE__ */ React.createElement("span", { className: "text-xs text-gray-500 w-16 text-right" }, loja.jornadas, " jornadas"))))), /* @__PURE__ */ React.createElement("div", { className: "pt-3 border-t border-gray-200" }, /* @__PURE__ */ React.createElement("div", { className: "flex justify-center gap-4 text-xs" }, /* @__PURE__ */ React.createElement("div", { className: "flex items-center gap-1" }, /* @__PURE__ */ React.createElement("div", { className: "w-2 h-2 bg-yellow-500 rounded-full" }), /* @__PURE__ */ React.createElement("span", { className: "text-gray-600" }, "1\xBA Lugar")), /* @__PURE__ */ React.createElement("div", { className: "flex items-center gap-1" }, /* @__PURE__ */ React.createElement("div", { className: "w-2 h-2 bg-gray-500 rounded-full" }), /* @__PURE__ */ React.createElement("span", { className: "text-gray-600" }, "2\xBA Lugar")), /* @__PURE__ */ React.createElement("div", { className: "flex items-center gap-1" }, /* @__PURE__ */ React.createElement("div", { className: "w-2 h-2 bg-orange-500 rounded-full" }), /* @__PURE__ */ React.createElement("span", { className: "text-gray-600" }, "3\xBA Lugar")), /* @__PURE__ */ React.createElement("div", { className: "flex items-center gap-1" }, /* @__PURE__ */ React.createElement("div", { className: "w-2 h-2 bg-blue-500 rounded-full" }), /* @__PURE__ */ React.createElement("span", { className: "text-gray-600" }, "Demais"))))) : /* @__PURE__ */ React.createElement("div", { className: "text-center py-8 text-gray-500" }, /* @__PURE__ */ React.createElement("div", { className: "text-4xl mb-2" }, "\u{1F4CA}"), /* @__PURE__ */ React.createElement("p", null, "Selecione um per\xEDodo para ver os dados")));
+  })()), /* @__PURE__ */ React.createElement("div", { className: "bg-white rounded-lg shadow p-6" }, /* @__PURE__ */ React.createElement("h3", { className: "text-lg font-semibold text-gray-900 mb-4" }, "\u{1F3C6} TOP 4 Motoboys"), (() => {
+    const jornadasPeriodo = relatorioConfig.dataInicio && relatorioConfig.dataFim ? getJornadasFiltradas().filter((j) => j.data >= relatorioConfig.dataInicio && j.data <= relatorioConfig.dataFim) : [];
+    const dadosMotoboys = motoboys.filter((m) => m.status === "ativo").map((motoboy) => {
+      const jornadasMotoboy = jornadasPeriodo.filter((j) => j.motoboyId === motoboy.id);
+      const totalFaturamento = jornadasMotoboy.reduce((sum, j) => sum + (j.valorDiaria || 0) + (j.valorCorridas || 0) + (j.comissoes || 0) + (j.missoes || 0), 0);
+      const totalJornadas = jornadasMotoboy.length;
+      const mediaJornada = totalJornadas > 0 ? totalFaturamento / totalJornadas : 0;
+      return {
+        nome: motoboy.nome,
+        faturamento: totalFaturamento,
+        jornadas: totalJornadas,
+        media: mediaJornada
+      };
+    }).sort((a, b) => b.faturamento - a.faturamento);
+    const top4 = dadosMotoboys.slice(0, 4);
+    return /* @__PURE__ */ React.createElement("div", { className: "space-y-4" }, top4.length > 0 ? /* @__PURE__ */ React.createElement(React.Fragment, null, /* @__PURE__ */ React.createElement("div", { className: "grid grid-cols-2 gap-4" }, top4.map((motoboy, index) => /* @__PURE__ */ React.createElement("div", { key: index, className: `p-4 rounded-lg border-2 ${index === 0 ? "bg-gradient-to-r from-yellow-50 to-yellow-100 border-yellow-300" : index === 1 ? "bg-gradient-to-r from-gray-50 to-gray-100 border-gray-300" : index === 2 ? "bg-gradient-to-r from-orange-50 to-orange-100 border-orange-300" : "bg-gradient-to-r from-blue-50 to-blue-100 border-blue-300"}` }, /* @__PURE__ */ React.createElement("div", { className: "flex items-center gap-3" }, /* @__PURE__ */ React.createElement("div", { className: `w-12 h-12 rounded-full flex items-center justify-center text-white font-bold text-lg ${index === 0 ? "bg-yellow-500 shadow-lg" : index === 1 ? "bg-gray-400 shadow-lg" : index === 2 ? "bg-orange-500 shadow-lg" : "bg-blue-500 shadow-lg"}` }, index + 1), /* @__PURE__ */ React.createElement("div", { className: "flex-1" }, /* @__PURE__ */ React.createElement("div", { className: "font-semibold text-gray-900 text-sm" }, motoboy.nome), /* @__PURE__ */ React.createElement("div", { className: "text-xs text-gray-600" }, motoboy.jornadas, " jornadas"))), /* @__PURE__ */ React.createElement("div", { className: "mt-3 text-center" }, /* @__PURE__ */ React.createElement("div", { className: "text-lg font-bold text-gray-900" }, "R$ ", motoboy.faturamento.toFixed(2)), /* @__PURE__ */ React.createElement("div", { className: "text-xs text-gray-600" }, "M\xE9dia: R$ ", motoboy.media.toFixed(2)))))), /* @__PURE__ */ React.createElement("div", { className: "pt-3 border-t border-gray-200" }, /* @__PURE__ */ React.createElement("div", { className: "flex justify-center gap-6 text-xs" }, /* @__PURE__ */ React.createElement("div", { className: "flex items-center gap-1" }, /* @__PURE__ */ React.createElement("span", { className: "text-2xl" }, "\u{1F947}"), /* @__PURE__ */ React.createElement("span", { className: "text-gray-600" }, "1\xBA Lugar")), /* @__PURE__ */ React.createElement("div", { className: "flex items-center gap-1" }, /* @__PURE__ */ React.createElement("span", { className: "text-2xl" }, "\u{1F948}"), /* @__PURE__ */ React.createElement("span", { className: "text-gray-600" }, "2\xBA Lugar")), /* @__PURE__ */ React.createElement("div", { className: "flex items-center gap-1" }, /* @__PURE__ */ React.createElement("span", { className: "text-2xl" }, "\u{1F949}"), /* @__PURE__ */ React.createElement("span", { className: "text-gray-600" }, "3\xBA Lugar")), /* @__PURE__ */ React.createElement("div", { className: "flex items-center gap-1" }, /* @__PURE__ */ React.createElement("span", { className: "text-2xl" }, "\u{1F3C5}"), /* @__PURE__ */ React.createElement("span", { className: "text-gray-600" }, "4\xBA Lugar"))))) : /* @__PURE__ */ React.createElement("div", { className: "text-center py-8 text-gray-500" }, /* @__PURE__ */ React.createElement("div", { className: "text-4xl mb-2" }, "\u{1F3C6}"), /* @__PURE__ */ React.createElement("p", null, "Selecione um per\xEDodo para ver o ranking")));
+  })())), /* @__PURE__ */ React.createElement("div", { className: "bg-white rounded-lg shadow p-6" }, /* @__PURE__ */ React.createElement("h3", { className: "text-lg font-semibold text-gray-900 mb-4" }, "\u{1F4C8} Evolu\xE7\xE3o Temporal (\xDAltimos 30 dias)"), (() => {
+    const hoje = /* @__PURE__ */ new Date();
+    const trintaDiasAtras = new Date(hoje.getTime() - 30 * 24 * 60 * 60 * 1e3);
+    const dadosUltimos30Dias = [];
+    for (let i = 0; i < 30; i++) {
+      const data = new Date(trintaDiasAtras.getTime() + i * 24 * 60 * 60 * 1e3);
+      const dataStr = data.toISOString().split("T")[0];
+      const jornadasDia = getJornadasFiltradas().filter((j) => j.data === dataStr);
+      const faturamentoDia = jornadasDia.reduce((sum, j) => sum + (j.valorDiaria || 0) + (j.valorCorridas || 0) + (j.comissoes || 0) + (j.missoes || 0), 0);
+      dadosUltimos30Dias.push({
+        data: dataStr,
+        dia: data.getDate(),
+        faturamento: faturamentoDia,
+        jornadas: jornadasDia.length
+      });
+    }
+    const maxFaturamento = Math.max(...dadosUltimos30Dias.map((d) => d.faturamento), 1);
+    return /* @__PURE__ */ React.createElement("div", { className: "space-y-4" }, /* @__PURE__ */ React.createElement("div", { className: "flex items-end justify-between h-48 bg-gray-50 rounded-lg p-4" }, dadosUltimos30Dias.map((dia, index) => /* @__PURE__ */ React.createElement("div", { key: index, className: "flex flex-col items-center flex-1 max-w-[20px]" }, /* @__PURE__ */ React.createElement(
+      "div",
+      {
+        className: "bg-blue-500 rounded-t w-full min-h-[2px] hover:bg-blue-600 transition-colors cursor-pointer",
+        style: { height: `${dia.faturamento / maxFaturamento * 160}px` },
+        title: `${dia.dia}/${new Date(dia.data).getMonth() + 1}: R$ ${dia.faturamento.toFixed(2)} (${dia.jornadas} jornadas)`
+      }
+    ), /* @__PURE__ */ React.createElement("span", { className: "text-xs text-gray-600 mt-1" }, dia.dia)))), /* @__PURE__ */ React.createElement("div", { className: "grid grid-cols-1 md:grid-cols-4 gap-4" }, /* @__PURE__ */ React.createElement("div", { className: "bg-blue-50 p-4 rounded-lg" }, /* @__PURE__ */ React.createElement("div", { className: "text-sm text-blue-600 font-medium" }, "Faturamento Total"), /* @__PURE__ */ React.createElement("div", { className: "text-xl font-bold text-blue-900" }, "R$ ", dadosUltimos30Dias.reduce((sum, d) => sum + d.faturamento, 0).toFixed(2))), /* @__PURE__ */ React.createElement("div", { className: "bg-green-50 p-4 rounded-lg" }, /* @__PURE__ */ React.createElement("div", { className: "text-sm text-green-600 font-medium" }, "Jornadas Total"), /* @__PURE__ */ React.createElement("div", { className: "text-xl font-bold text-green-900" }, dadosUltimos30Dias.reduce((sum, d) => sum + d.jornadas, 0))), /* @__PURE__ */ React.createElement("div", { className: "bg-yellow-50 p-4 rounded-lg" }, /* @__PURE__ */ React.createElement("div", { className: "text-sm text-yellow-600 font-medium" }, "M\xE9dia Di\xE1ria"), /* @__PURE__ */ React.createElement("div", { className: "text-xl font-bold text-yellow-900" }, "R$ ", (dadosUltimos30Dias.reduce((sum, d) => sum + d.faturamento, 0) / 30).toFixed(2))), /* @__PURE__ */ React.createElement("div", { className: "bg-purple-50 p-4 rounded-lg" }, /* @__PURE__ */ React.createElement("div", { className: "text-sm text-purple-600 font-medium" }, "Melhor Dia"), /* @__PURE__ */ React.createElement("div", { className: "text-xl font-bold text-purple-900" }, (() => {
+      const melhorDia = dadosUltimos30Dias.reduce((max, d) => d.faturamento > max.faturamento ? d : max);
+      return `${melhorDia.dia}/${new Date(melhorDia.data).getMonth() + 1}`;
+    })()))));
+  })()), /* @__PURE__ */ React.createElement("div", { className: "bg-white rounded-lg shadow p-6" }, /* @__PURE__ */ React.createElement("h3", { className: "text-lg font-semibold text-gray-900 mb-4" }, "\u{1F4CB} Resumo Detalhado por Loja"), (() => {
+    const jornadasPeriodo = relatorioConfig.dataInicio && relatorioConfig.dataFim ? getJornadasFiltradas().filter((j) => j.data >= relatorioConfig.dataInicio && j.data <= relatorioConfig.dataFim) : [];
+    if (jornadasPeriodo.length === 0) {
+      return /* @__PURE__ */ React.createElement("div", { className: "text-center py-8 text-gray-500" }, /* @__PURE__ */ React.createElement("p", null, "Selecione um per\xEDodo para ver o resumo detalhado"));
+    }
+    const lojasComDados = getLojasFiltradas().map((loja) => {
+      const jornadasLoja = jornadasPeriodo.filter((j) => j.lojaId === loja.id);
+      const totalDiarias = jornadasLoja.reduce((sum, j) => sum + (j.valorDiaria || 0), 0);
+      const totalCorridas = jornadasLoja.reduce((sum, j) => sum + (j.valorCorridas || 0), 0);
+      const totalExtras = jornadasLoja.reduce((sum, j) => sum + (j.comissoes || 0) + (j.missoes || 0), 0);
+      const totalDescontos = jornadasLoja.reduce((sum, j) => sum + (j.descontos || 0), 0);
+      const totalBruto = totalDiarias + totalCorridas + totalExtras;
+      const totalLiquido = totalBruto - totalDescontos;
+      const motoboysDaLoja = [...new Set(jornadasLoja.map((j) => j.motoboyId))];
+      const mediaJornada = jornadasLoja.length > 0 ? totalBruto / jornadasLoja.length : 0;
+      return {
+        loja,
+        jornadasLoja,
+        totalDiarias,
+        totalCorridas,
+        totalExtras,
+        totalDescontos,
+        totalBruto,
+        totalLiquido,
+        motoboysDaLoja,
+        mediaJornada
+      };
+    }).sort((a, b) => b.totalLiquido - a.totalLiquido);
+    return /* @__PURE__ */ React.createElement("div", { className: "space-y-4" }, lojasComDados.map((dados, index) => /* @__PURE__ */ React.createElement("div", { key: dados.loja.id, className: "border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow relative" }, /* @__PURE__ */ React.createElement("div", { className: "absolute top-2 right-2" }, /* @__PURE__ */ React.createElement("span", { className: `inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${index === 0 ? "bg-yellow-100 text-yellow-800" : index === 1 ? "bg-gray-100 text-gray-800" : index === 2 ? "bg-orange-100 text-orange-800" : "bg-blue-100 text-blue-800"}` }, index + 1, "\xBA lugar")), /* @__PURE__ */ React.createElement("div", { className: "flex justify-between items-start mb-4 pr-16" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("h4", { className: "font-semibold text-gray-900 text-lg" }, dados.loja.nome), /* @__PURE__ */ React.createElement("p", { className: "text-sm text-gray-600" }, dados.loja.contato)), /* @__PURE__ */ React.createElement("div", { className: "text-right" }, /* @__PURE__ */ React.createElement("div", { className: "text-2xl font-bold text-green-600" }, "R$ ", dados.totalLiquido.toFixed(2)), /* @__PURE__ */ React.createElement("div", { className: "text-sm text-gray-600" }, "Total L\xEDquido"))), /* @__PURE__ */ React.createElement("div", { className: "grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4 text-sm" }, /* @__PURE__ */ React.createElement("div", { className: "bg-blue-50 p-3 rounded" }, /* @__PURE__ */ React.createElement("div", { className: "text-blue-600 font-medium" }, "Jornadas"), /* @__PURE__ */ React.createElement("div", { className: "text-lg font-bold text-blue-900" }, dados.jornadasLoja.length)), /* @__PURE__ */ React.createElement("div", { className: "bg-green-50 p-3 rounded" }, /* @__PURE__ */ React.createElement("div", { className: "text-green-600 font-medium" }, "Di\xE1rias"), /* @__PURE__ */ React.createElement("div", { className: "text-lg font-bold text-green-900" }, "R$ ", dados.totalDiarias.toFixed(2))), /* @__PURE__ */ React.createElement("div", { className: "bg-yellow-50 p-3 rounded" }, /* @__PURE__ */ React.createElement("div", { className: "text-yellow-600 font-medium" }, "Corridas"), /* @__PURE__ */ React.createElement("div", { className: "text-lg font-bold text-yellow-900" }, "R$ ", dados.totalCorridas.toFixed(2))), /* @__PURE__ */ React.createElement("div", { className: "bg-purple-50 p-3 rounded" }, /* @__PURE__ */ React.createElement("div", { className: "text-purple-600 font-medium" }, "Extras"), /* @__PURE__ */ React.createElement("div", { className: "text-lg font-bold text-purple-900" }, "R$ ", dados.totalExtras.toFixed(2))), /* @__PURE__ */ React.createElement("div", { className: "bg-red-50 p-3 rounded" }, /* @__PURE__ */ React.createElement("div", { className: "text-red-600 font-medium" }, "Descontos"), /* @__PURE__ */ React.createElement("div", { className: "text-lg font-bold text-red-900" }, "R$ ", dados.totalDescontos.toFixed(2))), /* @__PURE__ */ React.createElement("div", { className: "bg-gray-50 p-3 rounded" }, /* @__PURE__ */ React.createElement("div", { className: "text-gray-600 font-medium" }, "Motoboys"), /* @__PURE__ */ React.createElement("div", { className: "text-lg font-bold text-gray-900" }, dados.motoboysDaLoja.length))), /* @__PURE__ */ React.createElement("div", { className: "mt-3 flex justify-between items-center text-sm text-gray-600" }, /* @__PURE__ */ React.createElement("span", null, "M\xE9dia por jornada: R$ ", dados.mediaJornada.toFixed(2)), /* @__PURE__ */ React.createElement("span", null, "Taxa Admin: ", dados.loja.usarTaxaPercentual ? `${dados.loja.percentualTaxa}%` : `R$ ${dados.loja.taxaAdministrativa.toFixed(2)}`)))));
+  })()), /* @__PURE__ */ React.createElement("div", { className: "bg-white rounded-lg shadow p-6" }, /* @__PURE__ */ React.createElement("h3", { className: "text-lg font-semibold text-gray-900 mb-4" }, "\u{1F514} Alertas e Notifica\xE7\xF5es"), /* @__PURE__ */ React.createElement("div", { className: "space-y-3" }, (() => {
+    const hoje = (/* @__PURE__ */ new Date()).toISOString().split("T")[0];
+    const debitosVencidos = getDebitosFiltrados().filter((d) => d.status === "pendente" && d.dataVencimento < hoje);
+    if (debitosVencidos.length > 0) {
+      return /* @__PURE__ */ React.createElement("div", { className: "bg-red-50 border border-red-200 rounded-lg p-4" }, /* @__PURE__ */ React.createElement("div", { className: "flex items-center gap-2 mb-2" }, /* @__PURE__ */ React.createElement("span", { className: "text-red-600 font-medium" }, "\u26A0\uFE0F D\xE9bitos Vencidos"), /* @__PURE__ */ React.createElement("span", { className: "bg-red-100 text-red-800 px-2 py-1 rounded-full text-xs font-medium" }, debitosVencidos.length)), /* @__PURE__ */ React.createElement("div", { className: "text-sm text-red-700" }, "Total: R$ ", debitosVencidos.reduce((sum, d) => sum + d.valor, 0).toFixed(2)));
+    }
+  })(), (() => {
+    const motoboysinativos = motoboys.filter((m) => m.status === "inativo");
+    if (motoboysinativos.length > 0) {
+      return /* @__PURE__ */ React.createElement("div", { className: "bg-yellow-50 border border-yellow-200 rounded-lg p-4" }, /* @__PURE__ */ React.createElement("div", { className: "flex items-center gap-2 mb-2" }, /* @__PURE__ */ React.createElement("span", { className: "text-yellow-600 font-medium" }, "\u26A0\uFE0F Motoboys Inativos"), /* @__PURE__ */ React.createElement("span", { className: "bg-yellow-100 text-yellow-800 px-2 py-1 rounded-full text-xs font-medium" }, motoboysinativos.length)), /* @__PURE__ */ React.createElement("div", { className: "text-sm text-yellow-700" }, "Verifique os motoboys inativos na se\xE7\xE3o de gest\xE3o"));
+    }
+  })(), /* @__PURE__ */ React.createElement("div", { className: "bg-green-50 border border-green-200 rounded-lg p-4" }, /* @__PURE__ */ React.createElement("div", { className: "flex items-center gap-2 mb-2" }, /* @__PURE__ */ React.createElement("span", { className: "text-green-600 font-medium" }, "\u2705 Sistema Operacional")), /* @__PURE__ */ React.createElement("div", { className: "text-sm text-green-700" }, "Todos os sistemas est\xE3o funcionando normalmente"))))), activeTab === "motoboys" && /* @__PURE__ */ React.createElement("div", { className: "space-y-6" }, /* @__PURE__ */ React.createElement("div", { className: "flex justify-between items-center" }, /* @__PURE__ */ React.createElement("h2", { className: "text-3xl font-bold text-gray-900" }, "Motoboys")), /* @__PURE__ */ React.createElement("div", { className: "bg-white rounded-lg shadow p-6" }, /* @__PURE__ */ React.createElement("h3", { className: "text-lg font-medium text-gray-900 mb-4" }, "Filtros"), /* @__PURE__ */ React.createElement("div", { className: "grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("label", { className: "block text-sm font-medium text-gray-700 mb-2" }, "Nome"), /* @__PURE__ */ React.createElement(
+    "input",
+    {
+      type: "text",
+      value: filtrosMotoboy.nome,
+      onChange: (e) => setFiltrosMotoboy({ ...filtrosMotoboy, nome: e.target.value }),
+      className: "w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm",
+      placeholder: "Buscar por nome..."
+    }
+  )), /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("label", { className: "block text-sm font-medium text-gray-700 mb-2" }, "Status"), /* @__PURE__ */ React.createElement(
+    "select",
+    {
+      value: filtrosMotoboy.status,
+      onChange: (e) => setFiltrosMotoboy({ ...filtrosMotoboy, status: e.target.value }),
+      className: "w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+    },
+    /* @__PURE__ */ React.createElement("option", { value: "" }, "Todos os status"),
+    /* @__PURE__ */ React.createElement("option", { value: "ativo" }, "Ativo"),
+    /* @__PURE__ */ React.createElement("option", { value: "inativo" }, "Inativo")
+  )), /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("label", { className: "block text-sm font-medium text-gray-700 mb-2" }, "CPF"), /* @__PURE__ */ React.createElement(
+    "input",
+    {
+      type: "text",
+      value: filtrosMotoboy.cpf,
+      onChange: (e) => setFiltrosMotoboy({ ...filtrosMotoboy, cpf: e.target.value }),
+      className: "w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm",
+      placeholder: "Buscar por CPF..."
+    }
+  )), /* @__PURE__ */ React.createElement("div", { className: "flex items-end gap-2" }, /* @__PURE__ */ React.createElement(
+    "button",
+    {
+      onClick: aplicarFiltrosMotoboy,
+      className: "bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 transition-colors text-sm"
+    },
+    "Filtrar"
+  ), /* @__PURE__ */ React.createElement(
+    "button",
+    {
+      onClick: limparFiltrosMotoboy,
+      className: "bg-gray-600 text-white px-4 py-2 rounded-md hover:bg-gray-700 transition-colors text-sm"
+    },
+    "Limpar"
+  ))), /* @__PURE__ */ React.createElement("div", { className: "mt-4 text-right" }, /* @__PURE__ */ React.createElement("span", { className: "text-sm text-gray-600" }, motoboysFiltrados.length, " motoboy(s) encontrado(s)"))), /* @__PURE__ */ React.createElement("div", { className: "bg-white rounded-lg shadow p-6" }, /* @__PURE__ */ React.createElement("h3", { className: "text-lg font-medium text-gray-900 mb-4" }, editingMotoboy ? "Editar Motoboy" : "Cadastrar Novo Motoboy"), /* @__PURE__ */ React.createElement("form", { onSubmit: addMotoboy, className: "grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("label", { className: "block text-sm font-medium text-gray-700 mb-2" }, "Nome"), /* @__PURE__ */ React.createElement(
+    "input",
+    {
+      type: "text",
+      value: motoboyForm.nome,
+      onChange: (e) => setMotoboyForm({ ...motoboyForm, nome: e.target.value }),
+      className: "w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500",
+      required: true
+    }
+  )), /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("label", { className: "block text-sm font-medium text-gray-700 mb-2" }, "CPF"), /* @__PURE__ */ React.createElement(
+    "input",
+    {
+      type: "text",
+      value: motoboyForm.cpf,
+      onChange: (e) => setMotoboyForm({ ...motoboyForm, cpf: formatCPF(e.target.value) }),
+      className: "w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500",
+      placeholder: "000.000.000-00",
+      maxLength: "14",
+      required: true
+    }
+  )), /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("label", { className: "block text-sm font-medium text-gray-700 mb-2" }, "Telefone"), /* @__PURE__ */ React.createElement(
+    "input",
+    {
+      type: "text",
+      value: motoboyForm.telefone,
+      onChange: (e) => setMotoboyForm({ ...motoboyForm, telefone: formatTelefone(e.target.value) }),
+      className: "w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500",
+      placeholder: "(00) 00000-0000",
+      maxLength: "15",
+      required: true
+    }
+  )), /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("label", { className: "block text-sm font-medium text-gray-700 mb-2" }, "Status"), /* @__PURE__ */ React.createElement(
+    "select",
+    {
+      value: motoboyForm.status,
+      onChange: (e) => setMotoboyForm({ ...motoboyForm, status: e.target.value }),
+      className: "w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+    },
+    /* @__PURE__ */ React.createElement("option", { value: "ativo" }, "Ativo"),
+    /* @__PURE__ */ React.createElement("option", { value: "inativo" }, "Inativo")
+  )), /* @__PURE__ */ React.createElement("div", { className: "md:col-span-2 lg:col-span-4" }, /* @__PURE__ */ React.createElement("div", { className: "flex gap-4" }, /* @__PURE__ */ React.createElement(
+    "button",
+    {
+      type: "submit",
+      className: "bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 transition-colors"
+    },
+    editingMotoboy ? "Atualizar Motoboy" : "Cadastrar Motoboy"
+  ), editingMotoboy && /* @__PURE__ */ React.createElement(
+    "button",
+    {
+      type: "button",
+      onClick: cancelarEdicaoMotoboy,
+      className: "bg-gray-600 text-white px-4 py-2 rounded-md hover:bg-gray-700 transition-colors"
+    },
+    "Cancelar"
+  ))))), /* @__PURE__ */ React.createElement("div", { className: "bg-white rounded-lg shadow overflow-hidden" }, /* @__PURE__ */ React.createElement("table", { className: "min-w-full divide-y divide-gray-200" }, /* @__PURE__ */ React.createElement("thead", { className: "bg-gray-50" }, /* @__PURE__ */ React.createElement("tr", null, /* @__PURE__ */ React.createElement("th", { className: "px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider" }, "Nome"), /* @__PURE__ */ React.createElement("th", { className: "px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider" }, "CPF"), /* @__PURE__ */ React.createElement("th", { className: "px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider" }, "Telefone"), /* @__PURE__ */ React.createElement("th", { className: "px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider" }, "Status"), /* @__PURE__ */ React.createElement("th", { className: "px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider" }, "A\xE7\xF5es"))), /* @__PURE__ */ React.createElement("tbody", { className: "bg-white divide-y divide-gray-200" }, motoboysFiltrados.sort((a, b) => a.nome.localeCompare(b.nome)).map((motoboy) => /* @__PURE__ */ React.createElement("tr", { key: motoboy.id }, /* @__PURE__ */ React.createElement("td", { className: "px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900" }, motoboy.nome), /* @__PURE__ */ React.createElement("td", { className: "px-6 py-4 whitespace-nowrap text-sm text-gray-500" }, motoboy.cpf), /* @__PURE__ */ React.createElement("td", { className: "px-6 py-4 whitespace-nowrap text-sm text-gray-500" }, motoboy.telefone), /* @__PURE__ */ React.createElement("td", { className: "px-6 py-4 whitespace-nowrap" }, /* @__PURE__ */ React.createElement("span", { className: `inline-flex px-2 py-1 text-xs font-semibold rounded-full ${motoboy.status === "ativo" ? "bg-green-100 text-green-800" : "bg-red-100 text-red-800"}` }, motoboy.status)), /* @__PURE__ */ React.createElement("td", { className: "px-6 py-4 whitespace-nowrap text-sm font-medium" }, /* @__PURE__ */ React.createElement("div", { className: "flex gap-2" }, /* @__PURE__ */ React.createElement(
+    "button",
+    {
+      onClick: () => editMotoboy(motoboy),
+      className: "text-blue-600 hover:text-blue-900"
+    },
+    "Editar"
+  ), /* @__PURE__ */ React.createElement(
+    "button",
+    {
+      onClick: () => deleteMotoboy(motoboy.id),
+      className: "text-red-600 hover:text-red-900"
+    },
+    "Excluir"
+  ))))))), motoboysFiltrados.length === 0 && /* @__PURE__ */ React.createElement("div", { className: "text-center py-8 text-gray-500" }, motoboys.length === 0 ? "Nenhum motoboy cadastrado ainda." : "Nenhum motoboy encontrado com os filtros aplicados."))), activeTab === "lojas" && currentUser.tipo === "admin" && /* @__PURE__ */ React.createElement("div", { className: "space-y-6" }, /* @__PURE__ */ React.createElement("div", { className: "flex justify-between items-center" }, /* @__PURE__ */ React.createElement("h2", { className: "text-3xl font-bold text-gray-900" }, "Lojas")), /* @__PURE__ */ React.createElement("div", { className: "bg-white rounded-lg shadow p-6" }, /* @__PURE__ */ React.createElement("h3", { className: "text-lg font-medium text-gray-900 mb-4" }, editingLoja ? "Editar Loja" : "Cadastrar Nova Loja"), /* @__PURE__ */ React.createElement("form", { onSubmit: addLoja, className: "space-y-4" }, /* @__PURE__ */ React.createElement("div", { className: "grid grid-cols-1 md:grid-cols-3 gap-4" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("label", { className: "block text-sm font-medium text-gray-700 mb-2" }, "Nome"), /* @__PURE__ */ React.createElement(
+    "input",
+    {
+      type: "text",
+      value: lojaForm.nome,
+      onChange: (e) => setLojaForm({ ...lojaForm, nome: e.target.value }),
+      className: "w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500",
+      required: true
+    }
+  )), /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("label", { className: "block text-sm font-medium text-gray-700 mb-2" }, "CNPJ"), /* @__PURE__ */ React.createElement(
+    "input",
+    {
+      type: "text",
+      value: lojaForm.cnpj,
+      onChange: (e) => setLojaForm({ ...lojaForm, cnpj: e.target.value }),
+      className: "w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500",
+      required: true
+    }
+  )), /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("label", { className: "block text-sm font-medium text-gray-700 mb-2" }, "Contato"), /* @__PURE__ */ React.createElement(
+    "input",
+    {
+      type: "text",
+      value: lojaForm.contato,
+      onChange: (e) => setLojaForm({ ...lojaForm, contato: e.target.value }),
+      className: "w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500",
+      required: true
+    }
+  ))), /* @__PURE__ */ React.createElement("div", { className: "grid grid-cols-1 md:grid-cols-2 gap-4" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("label", { className: "block text-sm font-medium text-gray-700 mb-2" }, "Valor Hora (Seg-S\xE1b)"), /* @__PURE__ */ React.createElement(
+    "input",
+    {
+      type: "number",
+      step: "0.01",
+      value: lojaForm.valorHoraSegSab,
+      onChange: (e) => setLojaForm({ ...lojaForm, valorHoraSegSab: parseFloat(e.target.value) }),
+      className: "w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+    }
+  )), /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("label", { className: "block text-sm font-medium text-gray-700 mb-2" }, "Valor Hora (Dom/Feriado)"), /* @__PURE__ */ React.createElement(
+    "input",
+    {
+      type: "number",
+      step: "0.01",
+      value: lojaForm.valorHoraDomFeriado,
+      onChange: (e) => setLojaForm({ ...lojaForm, valorHoraDomFeriado: parseFloat(e.target.value) }),
+      className: "w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+    }
+  ))), /* @__PURE__ */ React.createElement("div", { className: "grid grid-cols-1 md:grid-cols-2 gap-4" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("label", { className: "block text-sm font-medium text-gray-700 mb-2" }, "Valor Corrida (at\xE9 5km)"), /* @__PURE__ */ React.createElement(
+    "input",
+    {
+      type: "number",
+      step: "0.01",
+      value: lojaForm.valorCorridaAte5km,
+      onChange: (e) => setLojaForm({ ...lojaForm, valorCorridaAte5km: parseFloat(e.target.value) }),
+      className: "w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+    }
+  )), /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("label", { className: "block text-sm font-medium text-gray-700 mb-2" }, "Valor Corrida (acima 5km)"), /* @__PURE__ */ React.createElement(
+    "input",
+    {
+      type: "number",
+      step: "0.01",
+      value: lojaForm.valorCorridaAcima5km,
+      onChange: (e) => setLojaForm({ ...lojaForm, valorCorridaAcima5km: parseFloat(e.target.value) }),
+      className: "w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+    }
+  ))), /* @__PURE__ */ React.createElement("div", { className: "grid grid-cols-1 md:grid-cols-2 gap-4" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("label", { className: "block text-sm font-medium text-gray-700 mb-2" }, "Taxa Administrativa"), /* @__PURE__ */ React.createElement(
+    "input",
+    {
+      type: "number",
+      step: "0.01",
+      value: lojaForm.taxaAdministrativa,
+      onChange: (e) => setLojaForm({ ...lojaForm, taxaAdministrativa: parseFloat(e.target.value) }),
+      className: "w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+    }
+  )), /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("label", { className: "block text-sm font-medium text-gray-700 mb-2" }, "Taxa Supervis\xE3o"), /* @__PURE__ */ React.createElement(
+    "input",
+    {
+      type: "number",
+      step: "0.01",
+      value: lojaForm.taxaSupervisao,
+      onChange: (e) => setLojaForm({ ...lojaForm, taxaSupervisao: parseFloat(e.target.value) }),
+      className: "w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+    }
+  ))), /* @__PURE__ */ React.createElement("div", { className: "border-t pt-6" }, /* @__PURE__ */ React.createElement("h4", { className: "text-md font-medium text-gray-900 mb-4" }, "Taxa Administrativa Avan\xE7ada"), /* @__PURE__ */ React.createElement("div", { className: "flex items-center mb-4" }, /* @__PURE__ */ React.createElement(
+    "input",
+    {
+      id: "usarTaxaPercentual",
+      type: "checkbox",
+      checked: lojaForm.usarTaxaPercentual,
+      onChange: (e) => setLojaForm({ ...lojaForm, usarTaxaPercentual: e.target.checked }),
+      className: "h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+    }
+  ), /* @__PURE__ */ React.createElement("label", { htmlFor: "usarTaxaPercentual", className: "ml-2 block text-sm text-gray-900" }, "Usar taxa percentual quando valor total ultrapassar limite")), lojaForm.usarTaxaPercentual && /* @__PURE__ */ React.createElement("div", { className: "grid grid-cols-1 md:grid-cols-2 gap-4 bg-blue-50 p-4 rounded-lg" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("label", { className: "block text-sm font-medium text-gray-700 mb-2" }, "Limite para Taxa Fixa (R$)"), /* @__PURE__ */ React.createElement(
+    "input",
+    {
+      type: "number",
+      step: "0.01",
+      value: lojaForm.limiteValorFixo,
+      onChange: (e) => setLojaForm({ ...lojaForm, limiteValorFixo: parseFloat(e.target.value) }),
+      className: "w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500",
+      placeholder: "Ex: 1000.00"
+    }
+  ), /* @__PURE__ */ React.createElement("p", { className: "text-xs text-gray-600 mt-1" }, "At\xE9 este valor, ser\xE1 cobrada a taxa fixa de R$ ", lojaForm.taxaAdministrativa.toFixed(2))), /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("label", { className: "block text-sm font-medium text-gray-700 mb-2" }, "Taxa Percentual (%)"), /* @__PURE__ */ React.createElement(
+    "input",
+    {
+      type: "number",
+      step: "0.01",
+      value: lojaForm.percentualTaxa,
+      onChange: (e) => setLojaForm({ ...lojaForm, percentualTaxa: parseFloat(e.target.value) }),
+      className: "w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500",
+      placeholder: "Ex: 10.00"
+    }
+  ), /* @__PURE__ */ React.createElement("p", { className: "text-xs text-gray-600 mt-1" }, "Acima de R$ ", lojaForm.limiteValorFixo.toFixed(2), ", ser\xE1 cobrado ", lojaForm.percentualTaxa, "% do valor total")))), /* @__PURE__ */ React.createElement("div", { className: "flex gap-4" }, /* @__PURE__ */ React.createElement(
+    "button",
+    {
+      type: "submit",
+      className: "bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 transition-colors"
+    },
+    editingLoja ? "Atualizar Loja" : "Cadastrar Loja"
+  ), editingLoja && /* @__PURE__ */ React.createElement(
+    "button",
+    {
+      type: "button",
+      onClick: cancelarEdicaoLoja,
+      className: "bg-gray-600 text-white px-4 py-2 rounded-md hover:bg-gray-700 transition-colors"
+    },
+    "Cancelar"
+  )))), /* @__PURE__ */ React.createElement("div", { className: "bg-white rounded-lg shadow overflow-hidden" }, /* @__PURE__ */ React.createElement("table", { className: "min-w-full divide-y divide-gray-200" }, /* @__PURE__ */ React.createElement("thead", { className: "bg-gray-50" }, /* @__PURE__ */ React.createElement("tr", null, /* @__PURE__ */ React.createElement("th", { className: "px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider" }, "Nome"), /* @__PURE__ */ React.createElement("th", { className: "px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider" }, "CNPJ"), /* @__PURE__ */ React.createElement("th", { className: "px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider" }, "Contato"), /* @__PURE__ */ React.createElement("th", { className: "px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider" }, "Taxa Admin"), /* @__PURE__ */ React.createElement("th", { className: "px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider" }, "Taxa Percentual"), /* @__PURE__ */ React.createElement("th", { className: "px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider" }, "A\xE7\xF5es"))), /* @__PURE__ */ React.createElement("tbody", { className: "bg-white divide-y divide-gray-200" }, lojas.map((loja) => /* @__PURE__ */ React.createElement("tr", { key: loja.id }, /* @__PURE__ */ React.createElement("td", { className: "px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900" }, loja.nome), /* @__PURE__ */ React.createElement("td", { className: "px-6 py-4 whitespace-nowrap text-sm text-gray-500" }, loja.cnpj), /* @__PURE__ */ React.createElement("td", { className: "px-6 py-4 whitespace-nowrap text-sm text-gray-500" }, loja.contato), /* @__PURE__ */ React.createElement("td", { className: "px-6 py-4 whitespace-nowrap text-sm text-gray-500" }, loja.usarTaxaPercentual ? /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("span", null, "R$ ", loja.taxaAdministrativa.toFixed(2), " (at\xE9 R$ ", (loja.limiteValorFixo || 0).toFixed(2), ")")) : /* @__PURE__ */ React.createElement("span", null, "R$ ", loja.taxaAdministrativa.toFixed(2), " (fixo)")), /* @__PURE__ */ React.createElement("td", { className: "px-6 py-4 whitespace-nowrap text-sm text-gray-500" }, loja.usarTaxaPercentual ? /* @__PURE__ */ React.createElement("span", { className: "text-blue-600 font-medium" }, (loja.percentualTaxa || 0).toFixed(2), "%") : /* @__PURE__ */ React.createElement("span", { className: "text-gray-400" }, "-")), /* @__PURE__ */ React.createElement("td", { className: "px-6 py-4 whitespace-nowrap text-sm font-medium" }, /* @__PURE__ */ React.createElement("div", { className: "flex gap-2" }, /* @__PURE__ */ React.createElement(
+    "button",
+    {
+      onClick: () => editLoja(loja),
+      className: "text-blue-600 hover:text-blue-900"
+    },
+    "Editar"
+  ), /* @__PURE__ */ React.createElement(
+    "button",
+    {
+      onClick: () => deleteLoja(loja.id),
+      className: "text-red-600 hover:text-red-900"
+    },
+    "Excluir"
+  ))))))), lojas.length === 0 && /* @__PURE__ */ React.createElement("div", { className: "text-center py-8 text-gray-500" }, "Nenhuma loja cadastrada ainda."))), activeTab === "jornadas" && /* @__PURE__ */ React.createElement("div", { className: "space-y-6" }, /* @__PURE__ */ React.createElement("div", { className: "flex justify-between items-center" }, /* @__PURE__ */ React.createElement("h2", { className: "text-3xl font-bold text-gray-900" }, "Jornadas"), /* @__PURE__ */ React.createElement("div", { className: "flex gap-2" }, /* @__PURE__ */ React.createElement(
+    "button",
+    {
+      onClick: () => {
+        setEditingJornada(null);
+        setShowJornadaForm(true);
+        setCadastroMultiplo(false);
+        setJornadaForm({ data: "", motoboyId: "", lojaId: "", valorDiaria: 120, valorCorridas: 0, comissoes: 0, missoes: 0, descontos: 0, eFeriado: false, observacoes: "" });
+      },
+      className: "bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 transition-colors text-sm"
+    },
+    "Nova Jornada"
+  ), /* @__PURE__ */ React.createElement(
+    "button",
+    {
+      onClick: () => {
+        setEditingJornada(null);
+        setShowJornadaForm(true);
+        setCadastroMultiplo(true);
+        setJornadaMultiplaForm({ data: "", lojaId: "", eFeriado: false, motoboys: [] });
+      },
+      className: "bg-green-600 text-white px-4 py-2 rounded-md hover:bg-green-700 transition-colors text-sm"
+    },
+    "Cadastro M\xFAltiplo"
+  ))), /* @__PURE__ */ React.createElement("div", { className: "bg-white rounded-lg shadow p-6" }, /* @__PURE__ */ React.createElement("h3", { className: "text-lg font-medium text-gray-900 mb-4" }, "Filtros"), /* @__PURE__ */ React.createElement("div", { className: "grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("label", { className: "block text-sm font-medium text-gray-700 mb-2" }, "Data In\xEDcio"), /* @__PURE__ */ React.createElement(
+    "input",
+    {
+      type: "date",
+      value: filtros.dataInicio,
+      onChange: (e) => setFiltros({ ...filtros, dataInicio: e.target.value }),
+      className: "w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+    }
+  )), /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("label", { className: "block text-sm font-medium text-gray-700 mb-2" }, "Data Fim"), /* @__PURE__ */ React.createElement(
+    "input",
+    {
+      type: "date",
+      value: filtros.dataFim,
+      onChange: (e) => setFiltros({ ...filtros, dataFim: e.target.value }),
+      className: "w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+    }
+  )), /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("label", { className: "block text-sm font-medium text-gray-700 mb-2" }, "Motoboy"), /* @__PURE__ */ React.createElement(
+    "select",
+    {
+      value: filtros.motoboyId,
+      onChange: (e) => setFiltros({ ...filtros, motoboyId: e.target.value }),
+      className: "w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+    },
+    /* @__PURE__ */ React.createElement("option", { value: "" }, "Todos os motoboys"),
+    motoboys.filter((m) => m.status === "ativo").map((motoboy) => /* @__PURE__ */ React.createElement("option", { key: motoboy.id, value: motoboy.id }, motoboy.nome))
+  )), /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("label", { className: "block text-sm font-medium text-gray-700 mb-2" }, "Loja"), currentUser?.tipo === "lojista" ? /* @__PURE__ */ React.createElement(
+    "input",
+    {
+      type: "text",
+      value: getLojasFiltradas()[0]?.nome || "Nenhuma loja associada",
+      disabled: true,
+      className: "w-full px-3 py-2 border border-gray-300 rounded-md bg-gray-100 text-gray-500 text-sm"
+    }
+  ) : /* @__PURE__ */ React.createElement(
+    "select",
+    {
+      value: filtros.lojaId,
+      onChange: (e) => setFiltros({ ...filtros, lojaId: e.target.value }),
+      className: "w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+    },
+    /* @__PURE__ */ React.createElement("option", { value: "" }, "Todas as lojas"),
+    lojas.map((loja) => /* @__PURE__ */ React.createElement("option", { key: loja.id, value: loja.id }, loja.nome))
+  )), /* @__PURE__ */ React.createElement("div", { className: "flex items-end gap-2" }, /* @__PURE__ */ React.createElement(
+    "button",
+    {
+      onClick: () => aplicarFiltros(),
+      className: "bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 transition-colors text-sm"
+    },
+    "Filtrar"
+  ), /* @__PURE__ */ React.createElement(
+    "button",
+    {
+      onClick: limparFiltros,
+      className: "bg-gray-600 text-white px-4 py-2 rounded-md hover:bg-gray-700 transition-colors text-sm"
+    },
+    "Limpar"
+  ))), /* @__PURE__ */ React.createElement("div", { className: "mt-4" }, /* @__PURE__ */ React.createElement("div", { className: "flex items-center gap-4" }, /* @__PURE__ */ React.createElement("label", { className: "flex items-center text-sm" }, /* @__PURE__ */ React.createElement(
+    "input",
+    {
+      type: "checkbox",
+      checked: filtros.eFeriado,
+      onChange: (e) => setFiltros({ ...filtros, eFeriado: e.target.checked }),
+      className: "mr-2"
+    }
+  ), "Apenas Feriados"), /* @__PURE__ */ React.createElement("div", { className: "flex items-center" }, /* @__PURE__ */ React.createElement("span", { className: "text-sm text-gray-600 mr-2" }, "Buscar:"), /* @__PURE__ */ React.createElement(
+    "input",
+    {
+      type: "text",
+      value: filtros.busca,
+      onChange: (e) => setFiltros({ ...filtros, busca: e.target.value }),
+      placeholder: "Nome do motoboy ou loja...",
+      className: "px-3 py-1 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+    }
+  )))), /* @__PURE__ */ React.createElement("div", { className: "mt-4 text-right" }, /* @__PURE__ */ React.createElement("span", { className: "text-sm text-gray-600" }, jornadasFiltradas.length, " jornadas encontradas | Total valor: R$ ", jornadasFiltradas.reduce((sum, j) => sum + (j.valorDiaria || 0) + (j.valorCorridas || 0) + (j.comissoes || 0) + (j.missoes || 0) - (j.descontos || 0), 0).toFixed(2)))), showJornadaForm && /* @__PURE__ */ React.createElement("div", { className: "bg-white rounded-lg shadow p-6" }, /* @__PURE__ */ React.createElement("h3", { className: "text-lg font-medium text-gray-900 mb-4" }, editingJornada ? "Editar Jornada" : cadastroMultiplo ? "Cadastro M\xFAltiplo de Jornadas" : "Cadastrar Nova Jornada"), cadastroMultiplo && /* @__PURE__ */ React.createElement("div", { className: "mb-4 p-3 bg-green-50 border border-green-200 rounded-md" }, /* @__PURE__ */ React.createElement("p", { className: "text-sm text-green-700" }, /* @__PURE__ */ React.createElement("strong", null, "Modo Cadastro M\xFAltiplo:"), " Defina a data e loja, depois adicione motoboys com valores individualizados para cada um.")), /* @__PURE__ */ React.createElement("form", { onSubmit: addJornada, className: "space-y-6" }, !cadastroMultiplo && /* @__PURE__ */ React.createElement(React.Fragment, null, /* @__PURE__ */ React.createElement("div", { className: "grid grid-cols-1 md:grid-cols-3 gap-4" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("label", { className: "block text-sm font-medium text-gray-700 mb-2" }, "Data"), /* @__PURE__ */ React.createElement(
+    "input",
+    {
+      type: "date",
+      value: jornadaForm.data,
+      onChange: (e) => setJornadaForm({ ...jornadaForm, data: e.target.value }),
+      className: "w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500",
+      required: true
+    }
+  )), /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("label", { className: "block text-sm font-medium text-gray-700 mb-2" }, "Motoboy"), /* @__PURE__ */ React.createElement(
+    "select",
+    {
+      value: jornadaForm.motoboyId,
+      onChange: (e) => setJornadaForm({ ...jornadaForm, motoboyId: e.target.value }),
+      className: "w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500",
+      required: true
+    },
+    /* @__PURE__ */ React.createElement("option", { value: "" }, "Selecione um motoboy"),
+    motoboys.filter((m) => m.status === "ativo").map((motoboy) => /* @__PURE__ */ React.createElement("option", { key: motoboy.id, value: motoboy.id }, motoboy.nome))
+  )), /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("label", { className: "block text-sm font-medium text-gray-700 mb-2" }, "Loja"), currentUser?.tipo === "lojista" ? /* @__PURE__ */ React.createElement(
+    "input",
+    {
+      type: "text",
+      value: getLojasFiltradas()[0]?.nome || "Nenhuma loja associada",
+      disabled: true,
+      className: "w-full px-3 py-2 border border-gray-300 rounded-md bg-gray-100 text-gray-500"
+    }
+  ) : /* @__PURE__ */ React.createElement(
+    "select",
+    {
+      value: jornadaForm.lojaId,
+      onChange: (e) => setJornadaForm({ ...jornadaForm, lojaId: e.target.value }),
+      className: "w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500",
+      required: true
+    },
+    /* @__PURE__ */ React.createElement("option", { value: "" }, "Selecione uma loja"),
+    lojas.map((loja) => /* @__PURE__ */ React.createElement("option", { key: loja.id, value: loja.id }, loja.nome))
+  ))), /* @__PURE__ */ React.createElement("div", { className: "grid grid-cols-1 md:grid-cols-2 gap-4" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("label", { className: "block text-sm font-medium text-gray-700 mb-2" }, "Valor Di\xE1ria"), /* @__PURE__ */ React.createElement(
+    "input",
+    {
+      type: "number",
+      step: "0.01",
+      value: jornadaForm.valorDiaria,
+      onChange: (e) => setJornadaForm({ ...jornadaForm, valorDiaria: parseFloat(e.target.value) }),
+      className: "w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+    }
+  )), /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("label", { className: "block text-sm font-medium text-gray-700 mb-2" }, "Valor das Corridas"), /* @__PURE__ */ React.createElement(
+    "input",
+    {
+      type: "number",
+      step: "0.01",
+      value: jornadaForm.valorCorridas,
+      onChange: (e) => setJornadaForm({ ...jornadaForm, valorCorridas: parseFloat(e.target.value) }),
+      className: "w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+    }
+  ))), /* @__PURE__ */ React.createElement("div", { className: "grid grid-cols-1 md:grid-cols-3 gap-4" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("label", { className: "block text-sm font-medium text-gray-700 mb-2" }, "Comiss\xF5es"), /* @__PURE__ */ React.createElement(
+    "input",
+    {
+      type: "number",
+      step: "0.01",
+      value: jornadaForm.comissoes,
+      onChange: (e) => setJornadaForm({ ...jornadaForm, comissoes: parseFloat(e.target.value) }),
+      className: "w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+    }
+  )), /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("label", { className: "block text-sm font-medium text-gray-700 mb-2" }, "Miss\xF5es"), /* @__PURE__ */ React.createElement(
+    "input",
+    {
+      type: "number",
+      step: "0.01",
+      value: jornadaForm.missoes,
+      onChange: (e) => setJornadaForm({ ...jornadaForm, missoes: parseFloat(e.target.value) }),
+      className: "w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+    }
+  )), /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("label", { className: "block text-sm font-medium text-gray-700 mb-2" }, "Descontos"), /* @__PURE__ */ React.createElement(
+    "input",
+    {
+      type: "number",
+      step: "0.01",
+      value: jornadaForm.descontos,
+      onChange: (e) => setJornadaForm({ ...jornadaForm, descontos: parseFloat(e.target.value) }),
+      className: "w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+    }
+  ))), /* @__PURE__ */ React.createElement("div", { className: "flex items-center gap-4" }, /* @__PURE__ */ React.createElement("label", { className: "flex items-center" }, /* @__PURE__ */ React.createElement(
+    "input",
+    {
+      type: "checkbox",
+      checked: jornadaForm.eFeriado,
+      onChange: (e) => setJornadaForm({ ...jornadaForm, eFeriado: e.target.checked }),
+      className: "mr-2"
+    }
+  ), "\xC9 feriado")), /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("label", { className: "block text-sm font-medium text-gray-700 mb-2" }, "Observa\xE7\xF5es"), /* @__PURE__ */ React.createElement(
+    "textarea",
+    {
+      value: jornadaForm.observacoes,
+      onChange: (e) => setJornadaForm({ ...jornadaForm, observacoes: e.target.value }),
+      className: "w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500",
+      rows: "3"
+    }
+  ))), cadastroMultiplo && /* @__PURE__ */ React.createElement(React.Fragment, null, /* @__PURE__ */ React.createElement("div", { className: "grid grid-cols-1 md:grid-cols-3 gap-4" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("label", { className: "block text-sm font-medium text-gray-700 mb-2" }, "Data"), /* @__PURE__ */ React.createElement(
+    "input",
+    {
+      type: "date",
+      value: jornadaMultiplaForm.data,
+      onChange: (e) => setJornadaMultiplaForm({ ...jornadaMultiplaForm, data: e.target.value }),
+      className: "w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500",
+      required: true
+    }
+  )), /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("label", { className: "block text-sm font-medium text-gray-700 mb-2" }, "Loja"), currentUser?.tipo === "lojista" ? /* @__PURE__ */ React.createElement(
+    "input",
+    {
+      type: "text",
+      value: getLojasFiltradas()[0]?.nome || "Nenhuma loja associada",
+      disabled: true,
+      className: "w-full px-3 py-2 border border-gray-300 rounded-md bg-gray-100 text-gray-500"
+    }
+  ) : /* @__PURE__ */ React.createElement(
+    "select",
+    {
+      value: jornadaMultiplaForm.lojaId,
+      onChange: (e) => setJornadaMultiplaForm({ ...jornadaMultiplaForm, lojaId: e.target.value }),
+      className: "w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500",
+      required: true
+    },
+    /* @__PURE__ */ React.createElement("option", { value: "" }, "Selecione uma loja"),
+    lojas.map((loja) => /* @__PURE__ */ React.createElement("option", { key: loja.id, value: loja.id }, loja.nome))
+  )), /* @__PURE__ */ React.createElement("div", { className: "flex items-end" }, /* @__PURE__ */ React.createElement("label", { className: "flex items-center" }, /* @__PURE__ */ React.createElement(
+    "input",
+    {
+      type: "checkbox",
+      checked: jornadaMultiplaForm.eFeriado,
+      onChange: (e) => setJornadaMultiplaForm({ ...jornadaMultiplaForm, eFeriado: e.target.checked }),
+      className: "mr-2"
+    }
+  ), "\xC9 feriado"))), /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("div", { className: "flex justify-between items-center mb-4" }, /* @__PURE__ */ React.createElement("h4", { className: "text-md font-medium text-gray-900" }, "Motoboys"), /* @__PURE__ */ React.createElement(
+    "button",
+    {
+      type: "button",
+      onClick: adicionarMotoboyMultiplo,
+      className: "bg-green-600 text-white px-3 py-1 rounded-md hover:bg-green-700 transition-colors text-sm"
+    },
+    "+ Adicionar Motoboy"
+  )), jornadaMultiplaForm.motoboys.length === 0 && /* @__PURE__ */ React.createElement("div", { className: "text-center py-4 text-gray-500 border border-gray-200 rounded-md" }, 'Nenhum motoboy adicionado. Clique em "Adicionar Motoboy" para come\xE7ar.'), /* @__PURE__ */ React.createElement("div", { className: "space-y-4" }, jornadaMultiplaForm.motoboys.map((motoboyData, index) => {
+    const motoboy = motoboys.find((m) => m.id === motoboyData.motoboyId);
+    return /* @__PURE__ */ React.createElement("div", { key: index, className: "border border-gray-200 rounded-md p-4 bg-gray-50" }, /* @__PURE__ */ React.createElement("div", { className: "flex justify-between items-center mb-3" }, /* @__PURE__ */ React.createElement("h5", { className: "font-medium text-gray-900" }, motoboy?.nome || "Motoboy n\xE3o encontrado"), /* @__PURE__ */ React.createElement(
+      "button",
+      {
+        type: "button",
+        onClick: () => removerMotoboyMultiplo(index),
+        className: "text-red-600 hover:text-red-800 text-sm"
+      },
+      "Remover"
+    )), /* @__PURE__ */ React.createElement("div", { className: "grid grid-cols-1 md:grid-cols-3 gap-3" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("label", { className: "block text-xs font-medium text-gray-700 mb-1" }, "Motoboy"), /* @__PURE__ */ React.createElement(
       "select",
       {
-        value: formData.motoboyId,
-        onChange: (e) => setFormData({ ...formData, motoboyId: e.target.value }),
-        className: "w-full border rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500",
-        required: true
+        value: motoboyData.motoboyId,
+        onChange: (e) => atualizarMotoboyMultiplo(index, "motoboyId", e.target.value),
+        className: "w-full px-2 py-1 border border-gray-300 rounded text-sm focus:outline-none focus:ring-1 focus:ring-blue-500"
       },
       /* @__PURE__ */ React.createElement("option", { value: "" }, "Selecione um motoboy"),
-      motoboys.filter((m) => m.status === "ativo").map((motoboy) => /* @__PURE__ */ React.createElement("option", { key: motoboy.id, value: motoboy.id }, motoboy.nome))
-    )), /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("label", { className: "block text-sm font-medium mb-1" }, "Loja"), /* @__PURE__ */ React.createElement(
-      "select",
-      {
-        value: formData.lojaId,
-        onChange: (e) => setFormData({ ...formData, lojaId: e.target.value }),
-        className: "w-full border rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500",
-        required: true,
-        disabled: currentUser?.tipo === "lojista"
-      },
-      /* @__PURE__ */ React.createElement("option", { value: "" }, "Selecione uma loja"),
-      lojas.filter((loja) => canAccessLoja(loja.id)).map((loja) => /* @__PURE__ */ React.createElement("option", { key: loja.id, value: loja.id }, loja.nome))
-    )), /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("label", { className: "block text-sm font-medium mb-1" }, "Valor (R$)"), /* @__PURE__ */ React.createElement(
+      motoboys.filter(
+        (m) => m.status === "ativo" && (m.id === motoboyData.motoboyId || !jornadaMultiplaForm.motoboys.find((mb) => mb.motoboyId === m.id))
+      ).map((motoboy2) => /* @__PURE__ */ React.createElement("option", { key: motoboy2.id, value: motoboy2.id }, motoboy2.nome))
+    )), /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("label", { className: "block text-xs font-medium text-gray-700 mb-1" }, "Valor Di\xE1ria"), /* @__PURE__ */ React.createElement(
       "input",
       {
         type: "number",
         step: "0.01",
-        value: formData.valor,
-        onChange: (e) => setFormData({ ...formData, valor: e.target.value }),
-        className: "w-full border rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500",
-        min: "0",
-        required: true
+        value: motoboyData.valorDiaria,
+        onChange: (e) => atualizarMotoboyMultiplo(index, "valorDiaria", e.target.value),
+        className: "w-full px-2 py-1 border border-gray-300 rounded text-sm focus:outline-none focus:ring-1 focus:ring-blue-500"
       }
-    )), /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("label", { className: "block text-sm font-medium mb-1" }, "Data"), /* @__PURE__ */ React.createElement(
+    )), /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("label", { className: "block text-xs font-medium text-gray-700 mb-1" }, "Valor Corridas"), /* @__PURE__ */ React.createElement(
       "input",
       {
-        type: "date",
-        value: formData.data,
-        onChange: (e) => setFormData({ ...formData, data: e.target.value }),
-        className: "w-full border rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500",
-        required: true
+        type: "number",
+        step: "0.01",
+        value: motoboyData.valorCorridas,
+        onChange: (e) => atualizarMotoboyMultiplo(index, "valorCorridas", e.target.value),
+        className: "w-full px-2 py-1 border border-gray-300 rounded text-sm focus:outline-none focus:ring-1 focus:ring-blue-500"
       }
-    )), /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("label", { className: "block text-sm font-medium mb-1" }, "Observa\xE7\xE3o"), /* @__PURE__ */ React.createElement(
-      "textarea",
-      {
-        value: formData.observacao,
-        onChange: (e) => setFormData({ ...formData, observacao: e.target.value }),
-        className: "w-full border rounded px-3 py-2 h-20 focus:outline-none focus:ring-2 focus:ring-blue-500"
-      }
-    )), /* @__PURE__ */ React.createElement("div", { className: "flex gap-2" }, /* @__PURE__ */ React.createElement("button", { type: "submit", className: "flex-1 bg-blue-500 text-white py-2 rounded hover:bg-blue-600 transition-colors" }, editingItem ? "Atualizar" : "Registrar"), /* @__PURE__ */ React.createElement("button", { type: "button", onClick: handleClose, className: "flex-1 bg-gray-300 py-2 rounded hover:bg-gray-400 transition-colors" }, "Cancelar"))));
-  };
-  const Dashboard = () => {
-    const { weekStart, weekEnd } = getWeekRange(selectedWeek);
-    const jornadasSemana = jornadas.filter((j) => {
-      const dataJornada = new Date(j.data);
-      return dataJornada >= weekStart && dataJornada <= weekEnd;
-    });
-    const totalFaturamento = jornadasSemana.reduce((sum, j) => sum + calcularValorJornada(j), 0);
-    const totalCorridas = jornadasSemana.reduce((sum, j) => sum + (j.corridasAte5km || 0) + (j.corridasAcima5km || 0), 0);
-    const motoboyAtivos = motoboys.filter((m) => m.status === "ativo").length;
-    return /* @__PURE__ */ React.createElement("div", { className: "space-y-6" }, /* @__PURE__ */ React.createElement("div", { className: "flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4" }, /* @__PURE__ */ React.createElement("h2", { className: "text-2xl font-bold" }, "Dashboard"), /* @__PURE__ */ React.createElement("div", { className: "flex flex-col sm:flex-row gap-2 items-center" }, /* @__PURE__ */ React.createElement("label", { className: "text-sm font-medium" }, "Semana:"), /* @__PURE__ */ React.createElement(
+    ))), /* @__PURE__ */ React.createElement("div", { className: "grid grid-cols-1 md:grid-cols-3 gap-3 mt-3" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("label", { className: "block text-xs font-medium text-gray-700 mb-1" }, "Comiss\xF5es"), /* @__PURE__ */ React.createElement(
       "input",
       {
-        type: "date",
-        value: selectedWeek,
-        onChange: (e) => setSelectedWeek(e.target.value),
-        className: "border rounded px-3 py-1 focus:outline-none focus:ring-2 focus:ring-blue-500"
+        type: "number",
+        step: "0.01",
+        value: motoboyData.comissoes,
+        onChange: (e) => atualizarMotoboyMultiplo(index, "comissoes", e.target.value),
+        className: "w-full px-2 py-1 border border-gray-300 rounded text-sm focus:outline-none focus:ring-1 focus:ring-blue-500"
       }
-    ))), /* @__PURE__ */ React.createElement("div", { className: "grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4" }, /* @__PURE__ */ React.createElement("div", { className: "bg-blue-50 border border-blue-200 p-4 rounded-lg" }, /* @__PURE__ */ React.createElement("h3", { className: "text-lg font-semibold text-blue-800" }, "Faturamento Semanal"), /* @__PURE__ */ React.createElement("p", { className: "text-2xl font-bold text-blue-600" }, "R$ ", totalFaturamento.toFixed(2))), /* @__PURE__ */ React.createElement("div", { className: "bg-green-50 border border-green-200 p-4 rounded-lg" }, /* @__PURE__ */ React.createElement("h3", { className: "text-lg font-semibold text-green-800" }, "Total de Corridas"), /* @__PURE__ */ React.createElement("p", { className: "text-2xl font-bold text-green-600" }, totalCorridas)), /* @__PURE__ */ React.createElement("div", { className: "bg-yellow-50 border border-yellow-200 p-4 rounded-lg" }, /* @__PURE__ */ React.createElement("h3", { className: "text-lg font-semibold text-yellow-800" }, "Jornadas Semana"), /* @__PURE__ */ React.createElement("p", { className: "text-2xl font-bold text-yellow-600" }, jornadasSemana.length)), /* @__PURE__ */ React.createElement("div", { className: "bg-purple-50 border border-purple-200 p-4 rounded-lg" }, /* @__PURE__ */ React.createElement("h3", { className: "text-lg font-semibold text-purple-800" }, "Motoboys Ativos"), /* @__PURE__ */ React.createElement("p", { className: "text-2xl font-bold text-purple-600" }, motoboyAtivos))), /* @__PURE__ */ React.createElement("div", { className: "grid grid-cols-1 lg:grid-cols-2 gap-6" }, /* @__PURE__ */ React.createElement("div", { className: "bg-white border rounded-lg p-4" }, /* @__PURE__ */ React.createElement("h3", { className: "text-lg font-semibold mb-4" }, "Jornadas da Semana"), /* @__PURE__ */ React.createElement("div", { className: "space-y-2 max-h-64 overflow-y-auto" }, jornadasSemana.length === 0 ? /* @__PURE__ */ React.createElement("p", { className: "text-gray-500 text-center py-4" }, "Nenhuma jornada registrada nesta semana") : jornadasSemana.map((jornada) => {
-      const motoboy = motoboys.find((m) => m.id === jornada.motoboyId);
-      const loja = lojas.find((l) => l.id === jornada.lojaId);
-      return /* @__PURE__ */ React.createElement("div", { key: jornada.id, className: "border-l-4 border-blue-500 pl-3 py-2 bg-gray-50 rounded" }, /* @__PURE__ */ React.createElement("div", { className: "font-medium" }, motoboy?.nome || "Motoboy n\xE3o encontrado"), /* @__PURE__ */ React.createElement("div", { className: "text-sm text-gray-600" }, loja?.nome || "Loja n\xE3o encontrada", " - ", formatDateBR(jornada.data)), /* @__PURE__ */ React.createElement("div", { className: "text-sm" }, "R$ ", calcularValorJornada(jornada).toFixed(2)));
-    }))), /* @__PURE__ */ React.createElement("div", { className: "bg-white border rounded-lg p-4" }, /* @__PURE__ */ React.createElement("h3", { className: "text-lg font-semibold mb-4" }, "Resumo por Loja"), /* @__PURE__ */ React.createElement("div", { className: "space-y-2 max-h-64 overflow-y-auto" }, lojas.length === 0 ? /* @__PURE__ */ React.createElement("p", { className: "text-gray-500 text-center py-4" }, "Nenhuma loja cadastrada") : lojas.map((loja) => {
-      const jornadasLoja = jornadasSemana.filter((j) => j.lojaId === loja.id);
-      const custos = calcularCustosLoja(jornadasLoja, loja);
-      return /* @__PURE__ */ React.createElement("div", { key: loja.id, className: "border-l-4 border-green-500 pl-3 py-2 bg-gray-50 rounded" }, /* @__PURE__ */ React.createElement("div", { className: "font-medium" }, loja.nome), /* @__PURE__ */ React.createElement("div", { className: "text-sm text-gray-600" }, "Jornadas: ", jornadasLoja.length), /* @__PURE__ */ React.createElement("div", { className: "text-sm text-gray-600" }, "Log\xEDstica: R$ ", custos.valorLogistica.toFixed(2)), /* @__PURE__ */ React.createElement("div", { className: "text-sm text-gray-600" }, "Total Custo: R$ ", custos.total.toFixed(2)));
-    })))));
-  };
-  const MotoboysTab = () => {
-    const deleteMotoboy = (id) => {
-      if (window.confirm("Tem certeza que deseja excluir este motoboy?")) {
-        setMotoboys(motoboys.filter((m) => m.id !== id));
-      }
-    };
-    return /* @__PURE__ */ React.createElement("div", { className: "space-y-4" }, /* @__PURE__ */ React.createElement("div", { className: "flex justify-between items-center" }, /* @__PURE__ */ React.createElement("h2", { className: "text-2xl font-bold" }, "Motoboys"), hasPermission("manageMotoboys") && /* @__PURE__ */ React.createElement(
-      "button",
-      {
-        onClick: () => setShowMotoboyModal(true),
-        className: "flex items-center gap-2 bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600 transition-colors"
-      },
-      /* @__PURE__ */ React.createElement(PlusCircle, { size: 20 }),
-      "Novo Motoboy"
-    )), /* @__PURE__ */ React.createElement("div", { className: "bg-white border rounded-lg overflow-hidden" }, /* @__PURE__ */ React.createElement("div", { className: "overflow-x-auto" }, /* @__PURE__ */ React.createElement("table", { className: "w-full" }, /* @__PURE__ */ React.createElement("thead", { className: "bg-gray-50" }, /* @__PURE__ */ React.createElement("tr", null, /* @__PURE__ */ React.createElement("th", { className: "px-4 py-3 text-left text-sm font-medium text-gray-700" }, "Nome"), /* @__PURE__ */ React.createElement("th", { className: "px-4 py-3 text-left text-sm font-medium text-gray-700" }, "CPF"), /* @__PURE__ */ React.createElement("th", { className: "px-4 py-3 text-left text-sm font-medium text-gray-700" }, "Telefone"), /* @__PURE__ */ React.createElement("th", { className: "px-4 py-3 text-left text-sm font-medium text-gray-700" }, "Status"), /* @__PURE__ */ React.createElement("th", { className: "px-4 py-3 text-left text-sm font-medium text-gray-700" }, "A\xE7\xF5es"))), /* @__PURE__ */ React.createElement("tbody", { className: "divide-y divide-gray-200" }, motoboys.length === 0 ? /* @__PURE__ */ React.createElement("tr", null, /* @__PURE__ */ React.createElement("td", { colSpan: "5", className: "px-4 py-8 text-center text-gray-500" }, "Nenhum motoboy cadastrado")) : motoboys.map((motoboy) => /* @__PURE__ */ React.createElement("tr", { key: motoboy.id, className: "hover:bg-gray-50" }, /* @__PURE__ */ React.createElement("td", { className: "px-4 py-3" }, motoboy.nome), /* @__PURE__ */ React.createElement("td", { className: "px-4 py-3" }, motoboy.cpf), /* @__PURE__ */ React.createElement("td", { className: "px-4 py-3" }, motoboy.telefone), /* @__PURE__ */ React.createElement("td", { className: "px-4 py-3" }, /* @__PURE__ */ React.createElement("span", { className: `px-2 py-1 rounded-full text-xs font-medium ${motoboy.status === "ativo" ? "bg-green-100 text-green-800" : "bg-red-100 text-red-800"}` }, motoboy.status)), /* @__PURE__ */ React.createElement("td", { className: "px-4 py-3" }, /* @__PURE__ */ React.createElement("div", { className: "flex gap-2" }, /* @__PURE__ */ React.createElement(
-      "button",
-      {
-        onClick: () => {
-          setEditingItem(motoboy);
-          setShowMotoboyModal(true);
-        },
-        className: "text-blue-600 hover:text-blue-800 transition-colors"
-      },
-      /* @__PURE__ */ React.createElement(Edit, { size: 16 })
-    ), /* @__PURE__ */ React.createElement(
-      "button",
-      {
-        onClick: () => deleteMotoboy(motoboy.id),
-        className: "text-red-600 hover:text-red-800 transition-colors"
-      },
-      /* @__PURE__ */ React.createElement(Trash2, { size: 16 })
-    ))))))))));
-  };
-  const LojasTab = () => {
-    const deleteLoja = (id) => {
-      if (window.confirm("Tem certeza que deseja excluir esta loja?")) {
-        setLojas(lojas.filter((l) => l.id !== id));
-      }
-    };
-    return /* @__PURE__ */ React.createElement("div", { className: "space-y-4" }, /* @__PURE__ */ React.createElement("div", { className: "flex justify-between items-center" }, /* @__PURE__ */ React.createElement("h2", { className: "text-2xl font-bold" }, "Lojas"), hasPermission("manageLojas") && /* @__PURE__ */ React.createElement(
-      "button",
-      {
-        onClick: () => setShowLojaModal(true),
-        className: "flex items-center gap-2 bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600 transition-colors"
-      },
-      /* @__PURE__ */ React.createElement(PlusCircle, { size: 20 }),
-      "Nova Loja"
-    )), /* @__PURE__ */ React.createElement("div", { className: "bg-white border rounded-lg overflow-hidden" }, /* @__PURE__ */ React.createElement("div", { className: "overflow-x-auto" }, /* @__PURE__ */ React.createElement("table", { className: "w-full" }, /* @__PURE__ */ React.createElement("thead", { className: "bg-gray-50" }, /* @__PURE__ */ React.createElement("tr", null, /* @__PURE__ */ React.createElement("th", { className: "px-4 py-3 text-left text-sm font-medium text-gray-700" }, "Nome"), /* @__PURE__ */ React.createElement("th", { className: "px-4 py-3 text-left text-sm font-medium text-gray-700" }, "CNPJ"), /* @__PURE__ */ React.createElement("th", { className: "px-4 py-3 text-left text-sm font-medium text-gray-700" }, "Contato"), /* @__PURE__ */ React.createElement("th", { className: "px-4 py-3 text-left text-sm font-medium text-gray-700" }, "Taxa Admin"), /* @__PURE__ */ React.createElement("th", { className: "px-4 py-3 text-left text-sm font-medium text-gray-700" }, "Taxa Super"), /* @__PURE__ */ React.createElement("th", { className: "px-4 py-3 text-left text-sm font-medium text-gray-700" }, "A\xE7\xF5es"))), /* @__PURE__ */ React.createElement("tbody", { className: "divide-y divide-gray-200" }, lojas.length === 0 ? /* @__PURE__ */ React.createElement("tr", null, /* @__PURE__ */ React.createElement("td", { colSpan: "6", className: "px-4 py-8 text-center text-gray-500" }, "Nenhuma loja cadastrada")) : lojas.map((loja) => /* @__PURE__ */ React.createElement("tr", { key: loja.id, className: "hover:bg-gray-50" }, /* @__PURE__ */ React.createElement("td", { className: "px-4 py-3" }, loja.nome), /* @__PURE__ */ React.createElement("td", { className: "px-4 py-3" }, loja.cnpj), /* @__PURE__ */ React.createElement("td", { className: "px-4 py-3" }, loja.contato), /* @__PURE__ */ React.createElement("td", { className: "px-4 py-3" }, "R$ ", Number(loja.taxaAdministrativa || 0).toFixed(2)), /* @__PURE__ */ React.createElement("td", { className: "px-4 py-3" }, "R$ ", Number(loja.taxaSupervisao || 0).toFixed(2)), /* @__PURE__ */ React.createElement("td", { className: "px-4 py-3" }, /* @__PURE__ */ React.createElement("div", { className: "flex gap-2" }, /* @__PURE__ */ React.createElement(
-      "button",
-      {
-        onClick: () => {
-          setEditingItem(loja);
-          setShowLojaModal(true);
-        },
-        className: "text-blue-600 hover:text-blue-800 transition-colors"
-      },
-      /* @__PURE__ */ React.createElement(Edit, { size: 16 })
-    ), /* @__PURE__ */ React.createElement(
-      "button",
-      {
-        onClick: () => deleteLoja(loja.id),
-        className: "text-red-600 hover:text-red-800 transition-colors"
-      },
-      /* @__PURE__ */ React.createElement(Trash2, { size: 16 })
-    ))))))))));
-  };
-  const JornadasTab = () => {
-    const deleteJornada = (id) => {
-      if (window.confirm("Tem certeza que deseja excluir esta jornada?")) {
-        setJornadas(jornadas.filter((j) => j.id !== id));
-      }
-    };
-    const calcularDetalhesJornada = (jornada) => {
-      if (!jornada) return { horasTrabalhadas: 0, valorDiaria: 0, valorCorridas: 0, valorComissoes: 0, valorMissoes: 0, valorTotal: 0 };
-      const loja = lojas.find((l) => l.id === jornada.lojaId);
-      if (!loja) return { horasTrabalhadas: 0, valorDiaria: 0, valorCorridas: 0, valorComissoes: 0, valorMissoes: 0, valorTotal: 0 };
-      const horasTrabalhadas = calcularHorasTrabalhadas(jornada.horasEntrada, jornada.horasSaida);
-      const valorDiaria = Number(jornada.valorDiaria) || 0;
-      const corridasAte5km = Number(jornada.corridasAte5km) || 0;
-      const corridasAcima5km = Number(jornada.corridasAcima5km) || 0;
-      const valorCorridaAte5km = Number(loja.valorCorridaAte5km) || 0;
-      const valorCorridaAcima5km = Number(loja.valorCorridaAcima5km) || 0;
-      const valorCorridas = corridasAte5km * valorCorridaAte5km + corridasAcima5km * valorCorridaAcima5km;
-      const valorComissoes = Number(jornada.comissoes) || 0;
-      const valorMissoes = Number(jornada.missoes) || 0;
-      const valorTotal = valorDiaria + valorCorridas + valorComissoes + valorMissoes;
-      return {
-        horasTrabalhadas,
-        valorDiaria,
-        valorCorridas,
-        valorComissoes,
-        valorMissoes,
-        valorTotal: isNaN(valorTotal) ? 0 : valorTotal
-      };
-    };
-    return /* @__PURE__ */ React.createElement("div", { className: "space-y-4" }, /* @__PURE__ */ React.createElement("div", { className: "flex justify-between items-center" }, /* @__PURE__ */ React.createElement("h2", { className: "text-2xl font-bold" }, "Jornadas"), /* @__PURE__ */ React.createElement(
-      "button",
-      {
-        onClick: () => setShowJornadaModal(true),
-        className: "flex items-center gap-2 bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600 transition-colors"
-      },
-      /* @__PURE__ */ React.createElement(PlusCircle, { size: 20 }),
-      "Nova Jornada"
-    )), /* @__PURE__ */ React.createElement("div", { className: "bg-white border rounded-lg overflow-hidden" }, /* @__PURE__ */ React.createElement("div", { className: "overflow-x-auto" }, /* @__PURE__ */ React.createElement("table", { className: "w-full" }, /* @__PURE__ */ React.createElement("thead", { className: "bg-gray-50" }, /* @__PURE__ */ React.createElement("tr", null, /* @__PURE__ */ React.createElement("th", { className: "px-4 py-3 text-left text-sm font-medium text-gray-700" }, "Data"), /* @__PURE__ */ React.createElement("th", { className: "px-4 py-3 text-left text-sm font-medium text-gray-700" }, "Motoboy"), /* @__PURE__ */ React.createElement("th", { className: "px-4 py-3 text-left text-sm font-medium text-gray-700" }, "Loja"), /* @__PURE__ */ React.createElement("th", { className: "px-4 py-3 text-left text-sm font-medium text-gray-700" }, "Hor\xE1rio"), /* @__PURE__ */ React.createElement("th", { className: "px-4 py-3 text-left text-sm font-medium text-gray-700" }, "Horas"), /* @__PURE__ */ React.createElement("th", { className: "px-4 py-3 text-left text-sm font-medium text-gray-700" }, "Valor Di\xE1ria"), /* @__PURE__ */ React.createElement("th", { className: "px-4 py-3 text-left text-sm font-medium text-gray-700" }, "Corridas \u22645km"), /* @__PURE__ */ React.createElement("th", { className: "px-4 py-3 text-left text-sm font-medium text-gray-700" }, "Corridas >5km"), /* @__PURE__ */ React.createElement("th", { className: "px-4 py-3 text-left text-sm font-medium text-gray-700" }, "Valor Corridas"), /* @__PURE__ */ React.createElement("th", { className: "px-4 py-3 text-left text-sm font-medium text-gray-700" }, "Extras"), /* @__PURE__ */ React.createElement("th", { className: "px-4 py-3 text-left text-sm font-medium text-gray-700" }, "Total"), /* @__PURE__ */ React.createElement("th", { className: "px-4 py-3 text-left text-sm font-medium text-gray-700" }, "A\xE7\xF5es"))), /* @__PURE__ */ React.createElement("tbody", { className: "divide-y divide-gray-200" }, jornadas.length === 0 ? /* @__PURE__ */ React.createElement("tr", null, /* @__PURE__ */ React.createElement("td", { colSpan: "12", className: "px-4 py-8 text-center text-gray-500" }, "Nenhuma jornada registrada")) : jornadas.filter((jornada) => canAccessLoja(jornada.lojaId)).map((jornada) => {
-      const motoboy = motoboys.find((m) => m.id === jornada.motoboyId);
-      const loja = lojas.find((l) => l.id === jornada.lojaId);
-      const detalhes = calcularDetalhesJornada(jornada);
-      const totalExtras = detalhes.valorComissoes + detalhes.valorMissoes;
-      return /* @__PURE__ */ React.createElement("tr", { key: jornada.id, className: "hover:bg-gray-50" }, /* @__PURE__ */ React.createElement("td", { className: "px-4 py-3" }, /* @__PURE__ */ React.createElement("div", null, formatDateBR(jornada.data), jornada.eFeriado && /* @__PURE__ */ React.createElement("span", { className: "block text-xs text-red-600 font-medium" }, "FERIADO"))), /* @__PURE__ */ React.createElement("td", { className: "px-4 py-3" }, motoboy?.nome || "N/A"), /* @__PURE__ */ React.createElement("td", { className: "px-4 py-3" }, loja?.nome || "N/A"), /* @__PURE__ */ React.createElement("td", { className: "px-4 py-3" }, /* @__PURE__ */ React.createElement("div", { className: "text-sm" }, jornada.horasEntrada, " - ", jornada.horasSaida)), /* @__PURE__ */ React.createElement("td", { className: "px-4 py-3" }, /* @__PURE__ */ React.createElement("span", { className: "font-medium" }, detalhes.horasTrabalhadas.toFixed(1), "h")), /* @__PURE__ */ React.createElement("td", { className: "px-4 py-3" }, /* @__PURE__ */ React.createElement("span", { className: "text-blue-600 font-medium" }, "R$ ", (Number(jornada.valorDiaria) || 0).toFixed(2))), /* @__PURE__ */ React.createElement("td", { className: "px-4 py-3 text-center" }, jornada.corridasAte5km || 0), /* @__PURE__ */ React.createElement("td", { className: "px-4 py-3 text-center" }, jornada.corridasAcima5km || 0), /* @__PURE__ */ React.createElement("td", { className: "px-4 py-3" }, /* @__PURE__ */ React.createElement("span", { className: "text-green-600 font-medium" }, "R$ ", detalhes.valorCorridas.toFixed(2))), /* @__PURE__ */ React.createElement("td", { className: "px-4 py-3" }, totalExtras > 0 ? /* @__PURE__ */ React.createElement("div", { className: "text-sm" }, /* @__PURE__ */ React.createElement("span", { className: "text-purple-600 font-medium" }, "R$ ", totalExtras.toFixed(2)), (detalhes.valorComissoes > 0 || detalhes.valorMissoes > 0) && /* @__PURE__ */ React.createElement("div", { className: "text-xs text-gray-500" }, detalhes.valorComissoes > 0 && `Com: ${detalhes.valorComissoes.toFixed(2)}`, detalhes.valorComissoes > 0 && detalhes.valorMissoes > 0 && " | ", detalhes.valorMissoes > 0 && `Mis: ${detalhes.valorMissoes.toFixed(2)}`)) : /* @__PURE__ */ React.createElement("span", { className: "text-gray-400" }, "R$ 0,00")), /* @__PURE__ */ React.createElement("td", { className: "px-4 py-3" }, /* @__PURE__ */ React.createElement("span", { className: "font-bold text-gray-800" }, "R$ ", detalhes.valorTotal.toFixed(2))), /* @__PURE__ */ React.createElement("td", { className: "px-4 py-3" }, /* @__PURE__ */ React.createElement("div", { className: "flex gap-2" }, /* @__PURE__ */ React.createElement(
-        "button",
-        {
-          onClick: () => {
-            setEditingItem(jornada);
-            setShowJornadaModal(true);
-          },
-          className: "text-blue-600 hover:text-blue-800 transition-colors"
-        },
-        /* @__PURE__ */ React.createElement(Edit, { size: 16 })
-      ), /* @__PURE__ */ React.createElement(
-        "button",
-        {
-          onClick: () => deleteJornada(jornada.id),
-          className: "text-red-600 hover:text-red-800 transition-colors"
-        },
-        /* @__PURE__ */ React.createElement(Trash2, { size: 16 })
-      ))));
-    }))))));
-  };
-  const ColaboradoresTab = () => {
-    const deleteColaborador = (id) => {
-      if (window.confirm("Tem certeza que deseja excluir este colaborador?")) {
-        setColaboradores(colaboradores.filter((c) => c.id !== id));
-      }
-    };
-    const getTipoLabel = (tipo) => {
-      const labels = {
-        admin: "Administrador",
-        financeiro: "Financeiro",
-        lojista: "Lojista"
-      };
-      return labels[tipo] || tipo;
-    };
-    const getTipoBadgeColor = (tipo) => {
-      const colors = {
-        admin: "bg-red-100 text-red-800",
-        financeiro: "bg-blue-100 text-blue-800",
-        lojista: "bg-green-100 text-green-800"
-      };
-      return colors[tipo] || "bg-gray-100 text-gray-800";
-    };
-    return /* @__PURE__ */ React.createElement("div", { className: "space-y-4" }, /* @__PURE__ */ React.createElement("div", { className: "flex justify-between items-center" }, /* @__PURE__ */ React.createElement("h2", { className: "text-2xl font-bold" }, "Colaboradores"), /* @__PURE__ */ React.createElement(
-      "button",
-      {
-        onClick: () => setShowColaboradorModal(true),
-        className: "flex items-center gap-2 bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600 transition-colors"
-      },
-      /* @__PURE__ */ React.createElement(PlusCircle, { size: 20 }),
-      "Novo Colaborador"
-    )), /* @__PURE__ */ React.createElement("div", { className: "bg-white border rounded-lg overflow-hidden" }, /* @__PURE__ */ React.createElement("div", { className: "overflow-x-auto" }, /* @__PURE__ */ React.createElement("table", { className: "w-full" }, /* @__PURE__ */ React.createElement("thead", { className: "bg-gray-50" }, /* @__PURE__ */ React.createElement("tr", null, /* @__PURE__ */ React.createElement("th", { className: "px-4 py-3 text-left text-sm font-medium text-gray-700" }, "Nome"), /* @__PURE__ */ React.createElement("th", { className: "px-4 py-3 text-left text-sm font-medium text-gray-700" }, "Email"), /* @__PURE__ */ React.createElement("th", { className: "px-4 py-3 text-left text-sm font-medium text-gray-700" }, "Tipo"), /* @__PURE__ */ React.createElement("th", { className: "px-4 py-3 text-left text-sm font-medium text-gray-700" }, "Loja"), /* @__PURE__ */ React.createElement("th", { className: "px-4 py-3 text-left text-sm font-medium text-gray-700" }, "Status"), /* @__PURE__ */ React.createElement("th", { className: "px-4 py-3 text-left text-sm font-medium text-gray-700" }, "Data Cria\xE7\xE3o"), /* @__PURE__ */ React.createElement("th", { className: "px-4 py-3 text-left text-sm font-medium text-gray-700" }, "A\xE7\xF5es"))), /* @__PURE__ */ React.createElement("tbody", { className: "divide-y divide-gray-200" }, colaboradores.length === 0 ? /* @__PURE__ */ React.createElement("tr", null, /* @__PURE__ */ React.createElement("td", { colSpan: "7", className: "px-4 py-8 text-center text-gray-500" }, "Nenhum colaborador cadastrado")) : colaboradores.map((colaborador) => {
-      const loja = lojas.find((l) => l.id === colaborador.lojaId);
-      return /* @__PURE__ */ React.createElement("tr", { key: colaborador.id, className: "hover:bg-gray-50" }, /* @__PURE__ */ React.createElement("td", { className: "px-4 py-3" }, colaborador.nome), /* @__PURE__ */ React.createElement("td", { className: "px-4 py-3" }, colaborador.email), /* @__PURE__ */ React.createElement("td", { className: "px-4 py-3" }, /* @__PURE__ */ React.createElement("span", { className: `px-2 py-1 rounded-full text-xs font-medium ${getTipoBadgeColor(colaborador.tipo)}` }, getTipoLabel(colaborador.tipo))), /* @__PURE__ */ React.createElement("td", { className: "px-4 py-3" }, loja?.nome || "-"), /* @__PURE__ */ React.createElement("td", { className: "px-4 py-3" }, /* @__PURE__ */ React.createElement("span", { className: `px-2 py-1 rounded-full text-xs font-medium ${colaborador.ativo ? "bg-green-100 text-green-800" : "bg-red-100 text-red-800"}` }, colaborador.ativo ? "Ativo" : "Inativo")), /* @__PURE__ */ React.createElement("td", { className: "px-4 py-3" }, formatDateBR(colaborador.dataCriacao)), /* @__PURE__ */ React.createElement("td", { className: "px-4 py-3" }, /* @__PURE__ */ React.createElement("div", { className: "flex gap-2" }, /* @__PURE__ */ React.createElement(
-        "button",
-        {
-          onClick: () => {
-            setEditingItem(colaborador);
-            setShowColaboradorModal(true);
-          },
-          className: "text-blue-600 hover:text-blue-800 transition-colors"
-        },
-        /* @__PURE__ */ React.createElement(Edit, { size: 16 })
-      ), colaborador.id !== currentUser?.id && /* @__PURE__ */ React.createElement(
-        "button",
-        {
-          onClick: () => deleteColaborador(colaborador.id),
-          className: "text-red-600 hover:text-red-800 transition-colors"
-        },
-        /* @__PURE__ */ React.createElement(Trash2, { size: 16 })
-      ))));
-    }))))));
-  };
-  const AdiantamentosTab = () => {
-    const deleteAdiantamento = (id) => {
-      if (window.confirm("Tem certeza que deseja excluir este adiantamento?")) {
-        setAdiantamentos(adiantamentos.filter((a) => a.id !== id));
-      }
-    };
-    return /* @__PURE__ */ React.createElement("div", { className: "space-y-4" }, /* @__PURE__ */ React.createElement("div", { className: "flex justify-between items-center" }, /* @__PURE__ */ React.createElement("h2", { className: "text-2xl font-bold" }, "Adiantamentos"), /* @__PURE__ */ React.createElement(
-      "button",
-      {
-        onClick: () => setShowAdiantamentoModal(true),
-        className: "flex items-center gap-2 bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600 transition-colors"
-      },
-      /* @__PURE__ */ React.createElement(PlusCircle, { size: 20 }),
-      "Novo Adiantamento"
-    )), /* @__PURE__ */ React.createElement("div", { className: "bg-white border rounded-lg overflow-hidden" }, /* @__PURE__ */ React.createElement("div", { className: "overflow-x-auto" }, /* @__PURE__ */ React.createElement("table", { className: "w-full" }, /* @__PURE__ */ React.createElement("thead", { className: "bg-gray-50" }, /* @__PURE__ */ React.createElement("tr", null, /* @__PURE__ */ React.createElement("th", { className: "px-4 py-3 text-left text-sm font-medium text-gray-700" }, "Data"), /* @__PURE__ */ React.createElement("th", { className: "px-4 py-3 text-left text-sm font-medium text-gray-700" }, "Motoboy"), /* @__PURE__ */ React.createElement("th", { className: "px-4 py-3 text-left text-sm font-medium text-gray-700" }, "Loja"), /* @__PURE__ */ React.createElement("th", { className: "px-4 py-3 text-left text-sm font-medium text-gray-700" }, "Valor"), /* @__PURE__ */ React.createElement("th", { className: "px-4 py-3 text-left text-sm font-medium text-gray-700" }, "Observa\xE7\xE3o"), /* @__PURE__ */ React.createElement("th", { className: "px-4 py-3 text-left text-sm font-medium text-gray-700" }, "A\xE7\xF5es"))), /* @__PURE__ */ React.createElement("tbody", { className: "divide-y divide-gray-200" }, adiantamentos.length === 0 ? /* @__PURE__ */ React.createElement("tr", null, /* @__PURE__ */ React.createElement("td", { colSpan: "6", className: "px-4 py-8 text-center text-gray-500" }, "Nenhum adiantamento registrado")) : adiantamentos.filter((adiantamento) => canAccessLoja(adiantamento.lojaId)).map((adiantamento) => {
-      const motoboy = motoboys.find((m) => m.id === adiantamento.motoboyId);
-      const loja = lojas.find((l) => l.id === adiantamento.lojaId);
-      return /* @__PURE__ */ React.createElement("tr", { key: adiantamento.id, className: "hover:bg-gray-50" }, /* @__PURE__ */ React.createElement("td", { className: "px-4 py-3" }, formatDateBR(adiantamento.data)), /* @__PURE__ */ React.createElement("td", { className: "px-4 py-3" }, motoboy?.nome || "N/A"), /* @__PURE__ */ React.createElement("td", { className: "px-4 py-3" }, loja?.nome || "N/A"), /* @__PURE__ */ React.createElement("td", { className: "px-4 py-3" }, "R$ ", Number(adiantamento.valor || 0).toFixed(2)), /* @__PURE__ */ React.createElement("td", { className: "px-4 py-3" }, adiantamento.observacao), /* @__PURE__ */ React.createElement("td", { className: "px-4 py-3" }, /* @__PURE__ */ React.createElement("div", { className: "flex gap-2" }, /* @__PURE__ */ React.createElement(
-        "button",
-        {
-          onClick: () => {
-            setEditingItem(adiantamento);
-            setShowAdiantamentoModal(true);
-          },
-          className: "text-blue-600 hover:text-blue-800 transition-colors"
-        },
-        /* @__PURE__ */ React.createElement(Edit, { size: 16 })
-      ), /* @__PURE__ */ React.createElement(
-        "button",
-        {
-          onClick: () => deleteAdiantamento(adiantamento.id),
-          className: "text-red-600 hover:text-red-800 transition-colors"
-        },
-        /* @__PURE__ */ React.createElement(Trash2, { size: 16 })
-      ))));
-    }))))));
-  };
-  const RelatoriosTab = () => {
-    const [filtroLoja, setFiltroLoja] = useState(
-      currentUser?.tipo === "lojista" ? currentUser.lojaId : ""
-    );
-    const { weekStart, weekEnd } = getWeekRange(selectedWeek);
-    const jornadasSemana = jornadas.filter((j) => {
-      if (!j.data) return false;
-      const dataJornada = new Date(j.data);
-      const dentroSemana = dataJornada >= weekStart && dataJornada <= weekEnd;
-      const filtroLojaMatch = !filtroLoja || j.lojaId === filtroLoja;
-      return dentroSemana && filtroLojaMatch;
-    });
-    const adiantamentosSemana = adiantamentos.filter((a) => {
-      if (!a.data) return false;
-      const dataAdiantamento = new Date(a.data);
-      const dentroSemana = dataAdiantamento >= weekStart && dataAdiantamento <= weekEnd;
-      const filtroLojaMatch = !filtroLoja || a.lojaId === filtroLoja;
-      return dentroSemana && filtroLojaMatch;
-    });
-    const exportarRelatorioMotoboyCSV = () => {
-      const dados = relatorioMotoboys.filter((r) => r.temAtividade);
-      if (dados.length === 0) {
-        alert("Nenhum dado para exportar no per\xEDodo selecionado.");
-        return;
-      }
-      let csvContent = "";
-      if (filtroLoja) {
-        const loja = lojas.find((l) => l.id === filtroLoja);
-        csvContent += `EXPRESSO NEVES - RELAT\xD3RIO DE MOTOBOYS
-`;
-        csvContent += `LOJA: ${loja?.nome || "N/A"}
-`;
-        csvContent += `Per\xEDodo: ${weekStart.toLocaleDateString("pt-BR")} a ${weekEnd.toLocaleDateString("pt-BR")}
-
-`;
-        csvContent += ["Motoboy", "Total Horas", "Total Corridas", "Corridas \u22645km", "Corridas >5km", "Valor Bruto", "Adiantamentos", "Valor L\xEDquido"].join(",") + "\n";
-        dados.forEach((r) => {
-          csvContent += [
-            r.motoboy.nome,
-            r.totalHoras.toFixed(1),
-            r.totalCorridas,
-            r.totalCorridasAte5km,
-            r.totalCorridasAcima5km,
-            `R$ ${r.valorBruto.toFixed(2)}`,
-            `R$ ${r.totalAdiantamentos.toFixed(2)}`,
-            `R$ ${r.valorLiquido.toFixed(2)}`
-          ].join(",") + "\n";
-        });
-      } else {
-        csvContent += `EXPRESSO NEVES - RELAT\xD3RIO DE MOTOBOYS POR LOJA
-`;
-        csvContent += `Per\xEDodo: ${weekStart.toLocaleDateString("pt-BR")} a ${weekEnd.toLocaleDateString("pt-BR")}
-
-`;
-        lojas.forEach((loja) => {
-          const motoboysDaLoja = dados.filter((r) => {
-            const jornadasDoMotoboy = jornadasSemana.filter((j) => j.motoboyId === r.motoboy.id && j.lojaId === loja.id);
-            return jornadasDoMotoboy.length > 0;
-          });
-          if (motoboysDaLoja.length > 0) {
-            csvContent += `
-LOJA: ${loja.nome}
-`;
-            csvContent += ["Motoboy", "Total Horas", "Total Corridas", "Corridas \u22645km", "Corridas >5km", "Valor Bruto", "Adiantamentos", "Valor L\xEDquido"].join(",") + "\n";
-            motoboysDaLoja.forEach((r) => {
-              csvContent += [
-                r.motoboy.nome,
-                r.totalHoras.toFixed(1),
-                r.totalCorridas,
-                r.totalCorridasAte5km,
-                r.totalCorridasAcima5km,
-                `R$ ${r.valorBruto.toFixed(2)}`,
-                `R$ ${r.totalAdiantamentos.toFixed(2)}`,
-                `R$ ${r.valorLiquido.toFixed(2)}`
-              ].join(",") + "\n";
-            });
-            csvContent += `${"=".repeat(80)}
-`;
-          }
-        });
-      }
-      const blob = new Blob([csvContent], { type: "text/csv" });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = `relatorio_motoboys_${weekStart.toLocaleDateString("pt-BR").replace(/\//g, "-")}.csv`;
-      a.click();
-      URL.revokeObjectURL(url);
-    };
-    const exportarRelatorioMotoboyPDF = () => {
-      const dados = relatorioMotoboys.filter((r) => r.temAtividade);
-      if (dados.length === 0) {
-        alert("Nenhum dado para exportar no per\xEDodo selecionado.");
-        return;
-      }
-      const doc = new jsPDF();
-      let currentY = 20;
-      if (filtroLoja) {
-        const loja = lojas.find((l) => l.id === filtroLoja);
-        doc.setFontSize(16);
-        doc.text("EXPRESSO NEVES - RELAT\xD3RIO DE MOTOBOYS", 20, currentY);
-        currentY += 10;
-        doc.setFontSize(12);
-        doc.text(`Per\xEDodo: ${weekStart.toLocaleDateString("pt-BR")} a ${weekEnd.toLocaleDateString("pt-BR")}`, 20, currentY);
-        currentY += 7;
-        doc.text(`Loja: ${loja?.nome || "N/A"}`, 20, currentY);
-        currentY += 15;
-        const tableData = dados.map((r) => [
-          r.motoboy.nome,
-          `${r.totalHoras.toFixed(1)}h`,
-          r.totalCorridas.toString(),
-          `${r.totalCorridasAte5km} | ${r.totalCorridasAcima5km}`,
-          `R$ ${r.valorBruto.toFixed(2)}`,
-          `R$ ${r.totalAdiantamentos.toFixed(2)}`,
-          `R$ ${r.valorLiquido.toFixed(2)}`
-        ]);
-        autoTable(doc, {
-          head: [["Motoboy", "Horas", "Corridas", "\u22645km | >5km", "Valor Bruto", "Adiantamentos", "Valor L\xEDquido"]],
-          body: tableData,
-          startY: currentY,
-          styles: { fontSize: 9 },
-          headStyles: { fillColor: [66, 139, 202] }
-        });
-      } else {
-        doc.setFontSize(16);
-        doc.text("EXPRESSO NEVES - RELAT\xD3RIO DE MOTOBOYS POR LOJA", 20, currentY);
-        currentY += 10;
-        doc.setFontSize(12);
-        doc.text(`Per\xEDodo: ${weekStart.toLocaleDateString("pt-BR")} a ${weekEnd.toLocaleDateString("pt-BR")}`, 20, currentY);
-        currentY += 15;
-        lojas.forEach((loja, index) => {
-          const motoboysDaLoja = dados.filter((r) => {
-            const jornadasDoMotoboy = jornadasSemana.filter((j) => j.motoboyId === r.motoboy.id && j.lojaId === loja.id);
-            return jornadasDoMotoboy.length > 0;
-          });
-          if (motoboysDaLoja.length > 0) {
-            if (index > 0) {
-              doc.addPage();
-              currentY = 20;
-            }
-            doc.setFontSize(14);
-            doc.text(`LOJA: ${loja.nome}`, 20, currentY);
-            currentY += 15;
-            const tableData = motoboysDaLoja.map((r) => [
-              r.motoboy.nome,
-              `${r.totalHoras.toFixed(1)}h`,
-              r.totalCorridas.toString(),
-              `${r.totalCorridasAte5km} | ${r.totalCorridasAcima5km}`,
-              `R$ ${r.valorBruto.toFixed(2)}`,
-              `R$ ${r.totalAdiantamentos.toFixed(2)}`,
-              `R$ ${r.valorLiquido.toFixed(2)}`
-            ]);
-            autoTable(doc, {
-              head: [["Motoboy", "Horas", "Corridas", "\u22645km | >5km", "Valor Bruto", "Adiantamentos", "Valor L\xEDquido"]],
-              body: tableData,
-              startY: currentY,
-              styles: { fontSize: 9 },
-              headStyles: { fillColor: [66, 139, 202] }
-            });
-          }
-        });
-      }
-      doc.save(`relatorio_motoboys_${weekStart.toLocaleDateString("pt-BR").replace(/\//g, "-")}.pdf`);
-    };
-    const exportarRelatorioLojasCSV = () => {
-      const dados = relatorioLojas.filter((r) => r.temAtividade);
-      if (dados.length === 0) {
-        alert("Nenhum dado para exportar no per\xEDodo selecionado.");
-        return;
-      }
-      let csvContent = "";
-      dados.forEach((relatorio) => {
-        csvContent += `
-EXPRESSO NEVES - RELAT\xD3RIO DA LOJA: ${relatorio.loja.nome}
-`;
-        csvContent += `Per\xEDodo: ${weekStart.toLocaleDateString("pt-BR")} a ${weekEnd.toLocaleDateString("pt-BR")}
-`;
-        csvContent += `CNPJ: ${relatorio.loja.cnpj}
-`;
-        csvContent += `Contato: ${relatorio.loja.contato}
-
-`;
-        csvContent += `RESUMO FINANCEIRO:
-`;
-        csvContent += `Valor Log\xEDstica,R$ ${relatorio.valorLogistica.toFixed(2)}
-`;
-        csvContent += `Taxa Administrativa,R$ ${relatorio.comissaoAdministrativa.toFixed(2)}
-`;
-        csvContent += `Taxa Supervis\xE3o,R$ ${relatorio.taxaSupervisao.toFixed(2)}
-`;
-        csvContent += `TOTAL,R$ ${relatorio.valorTotal.toFixed(2)}
-
-`;
-        csvContent += `DETALHAMENTO POR MOTOBOY:
-`;
-        csvContent += `Motoboy,Total Horas,Jornadas,Corridas \u22645km,Corridas >5km,Valor Corridas,Extras,Total Pago
-`;
-        const motoboyConsolidadoCSV = {};
-        relatorio.jornadasLoja.forEach((jornada) => {
-          const motoboy = motoboys.find((m) => m.id === jornada.motoboyId);
-          const motoboyNome = motoboy?.nome || "N/A";
-          const detalhes = calcularDetalhesJornada(jornada);
-          const totalExtras = detalhes.valorComissoes + detalhes.valorMissoes;
-          if (!motoboyConsolidadoCSV[jornada.motoboyId]) {
-            motoboyConsolidadoCSV[jornada.motoboyId] = {
-              nome: motoboyNome,
-              totalHoras: 0,
-              totalJornadas: 0,
-              totalCorridasAte5km: 0,
-              totalCorridasAcima5km: 0,
-              totalValorCorridas: 0,
-              totalExtras: 0,
-              totalPago: 0
-            };
-          }
-          motoboyConsolidadoCSV[jornada.motoboyId].totalHoras += detalhes.horasTrabalhadas;
-          motoboyConsolidadoCSV[jornada.motoboyId].totalJornadas += 1;
-          motoboyConsolidadoCSV[jornada.motoboyId].totalCorridasAte5km += jornada.corridasAte5km || 0;
-          motoboyConsolidadoCSV[jornada.motoboyId].totalCorridasAcima5km += jornada.corridasAcima5km || 0;
-          motoboyConsolidadoCSV[jornada.motoboyId].totalValorCorridas += detalhes.valorCorridas;
-          motoboyConsolidadoCSV[jornada.motoboyId].totalExtras += totalExtras;
-          motoboyConsolidadoCSV[jornada.motoboyId].totalPago += detalhes.valorTotal;
-        });
-        Object.values(motoboyConsolidadoCSV).forEach((motoboy) => {
-          csvContent += `${motoboy.nome},${motoboy.totalHoras.toFixed(1)}h,${motoboy.totalJornadas},${motoboy.totalCorridasAte5km},${motoboy.totalCorridasAcima5km},R$ ${motoboy.totalValorCorridas.toFixed(2)},R$ ${motoboy.totalExtras.toFixed(2)},R$ ${motoboy.totalPago.toFixed(2)}
-`;
-        });
-        csvContent += `
-${"=".repeat(80)}
-`;
-      });
-      const blob = new Blob([csvContent], { type: "text/csv" });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = `relatorio_detalhado_lojas_${weekStart.toLocaleDateString("pt-BR").replace(/\//g, "-")}.csv`;
-      a.click();
-      URL.revokeObjectURL(url);
-    };
-    const exportarRelatorioLojasPDF = () => {
-      const dados = relatorioLojas.filter((r) => r.temAtividade);
-      if (dados.length === 0) {
-        alert("Nenhum dado para exportar no per\xEDodo selecionado.");
-        return;
-      }
-      const doc = new jsPDF();
-      let currentY = 20;
-      dados.forEach((relatorio, index) => {
-        if (index > 0) {
-          doc.addPage();
-          currentY = 20;
-        }
-        doc.setFontSize(16);
-        doc.text(`EXPRESSO NEVES - RELAT\xD3RIO DA LOJA: ${relatorio.loja.nome}`, 20, currentY);
-        currentY += 10;
-        doc.setFontSize(12);
-        doc.text(`Per\xEDodo: ${weekStart.toLocaleDateString("pt-BR")} a ${weekEnd.toLocaleDateString("pt-BR")}`, 20, currentY);
-        currentY += 7;
-        doc.text(`CNPJ: ${relatorio.loja.cnpj}`, 20, currentY);
-        currentY += 7;
-        doc.text(`Contato: ${relatorio.loja.contato}`, 20, currentY);
-        currentY += 15;
-        doc.setFontSize(14);
-        doc.text("RESUMO FINANCEIRO:", 20, currentY);
-        currentY += 10;
-        doc.setFontSize(12);
-        doc.text(`Valor Log\xEDstica: R$ ${relatorio.valorLogistica.toFixed(2)}`, 30, currentY);
-        currentY += 7;
-        doc.text(`Taxa Administrativa: R$ ${relatorio.comissaoAdministrativa.toFixed(2)}`, 30, currentY);
-        currentY += 7;
-        doc.text(`Taxa Supervis\xE3o: R$ ${relatorio.taxaSupervisao.toFixed(2)}`, 30, currentY);
-        currentY += 7;
-        doc.setFontSize(14);
-        doc.text(`TOTAL A PAGAR: R$ ${relatorio.valorTotal.toFixed(2)}`, 30, currentY);
-        currentY += 15;
-        doc.setFontSize(14);
-        doc.text("DETALHAMENTO POR MOTOBOY:", 20, currentY);
-        currentY += 10;
-        const motoboyConsolidado = {};
-        relatorio.jornadasLoja.forEach((jornada) => {
-          const motoboy = motoboys.find((m) => m.id === jornada.motoboyId);
-          const motoboyNome = motoboy?.nome || "N/A";
-          const detalhes = calcularDetalhesJornada(jornada);
-          const totalExtras = detalhes.valorComissoes + detalhes.valorMissoes;
-          if (!motoboyConsolidado[jornada.motoboyId]) {
-            motoboyConsolidado[jornada.motoboyId] = {
-              nome: motoboyNome,
-              totalHoras: 0,
-              totalJornadas: 0,
-              totalCorridasAte5km: 0,
-              totalCorridasAcima5km: 0,
-              totalValorCorridas: 0,
-              totalExtras: 0,
-              totalPago: 0
-            };
-          }
-          motoboyConsolidado[jornada.motoboyId].totalHoras += detalhes.horasTrabalhadas;
-          motoboyConsolidado[jornada.motoboyId].totalJornadas += 1;
-          motoboyConsolidado[jornada.motoboyId].totalCorridasAte5km += jornada.corridasAte5km || 0;
-          motoboyConsolidado[jornada.motoboyId].totalCorridasAcima5km += jornada.corridasAcima5km || 0;
-          motoboyConsolidado[jornada.motoboyId].totalValorCorridas += detalhes.valorCorridas;
-          motoboyConsolidado[jornada.motoboyId].totalExtras += totalExtras;
-          motoboyConsolidado[jornada.motoboyId].totalPago += detalhes.valorTotal;
-        });
-        const tableData = Object.values(motoboyConsolidado).map((motoboy) => [
-          motoboy.nome,
-          `${motoboy.totalHoras.toFixed(1)}h`,
-          motoboy.totalJornadas.toString(),
-          motoboy.totalCorridasAte5km.toString(),
-          motoboy.totalCorridasAcima5km.toString(),
-          `R$ ${motoboy.totalValorCorridas.toFixed(2)}`,
-          `R$ ${motoboy.totalExtras.toFixed(2)}`,
-          `R$ ${motoboy.totalPago.toFixed(2)}`
-        ]);
-        tableData.push([
-          "TOTAL LOG\xCDSTICA:",
-          "",
-          "",
-          "",
-          "",
-          "",
-          "",
-          `R$ ${relatorio.valorLogistica.toFixed(2)}`
-        ]);
-        autoTable(doc, {
-          head: [["Motoboy", "Total Horas", "Jornadas", "\u22645km", ">5km", "Corridas", "Extras", "Total"]],
-          body: tableData,
-          startY: currentY,
-          styles: { fontSize: 8 },
-          headStyles: { fillColor: [66, 139, 202] },
-          margin: { left: 20, right: 20 }
-        });
-      });
-      doc.save(`relatorio_detalhado_lojas_${weekStart.toLocaleDateString("pt-BR").replace(/\//g, "-")}.pdf`);
-    };
-    const calcularDetalhesJornada = (jornada) => {
-      if (!jornada) return { horasTrabalhadas: 0, valorDiaria: 0, valorCorridas: 0, valorComissoes: 0, valorMissoes: 0, valorTotal: 0 };
-      const loja = lojas.find((l) => l.id === jornada.lojaId);
-      if (!loja) return { horasTrabalhadas: 0, valorDiaria: 0, valorCorridas: 0, valorComissoes: 0, valorMissoes: 0, valorTotal: 0 };
-      const horasTrabalhadas = calcularHorasTrabalhadas(jornada.horasEntrada, jornada.horasSaida);
-      const valorDiaria = Number(jornada.valorDiaria) || 0;
-      const corridasAte5km = Number(jornada.corridasAte5km) || 0;
-      const corridasAcima5km = Number(jornada.corridasAcima5km) || 0;
-      const valorCorridaAte5km = Number(loja.valorCorridaAte5km) || 0;
-      const valorCorridaAcima5km = Number(loja.valorCorridaAcima5km) || 0;
-      const valorCorridas = corridasAte5km * valorCorridaAte5km + corridasAcima5km * valorCorridaAcima5km;
-      const valorComissoes = Number(jornada.comissoes) || 0;
-      const valorMissoes = Number(jornada.missoes) || 0;
-      const valorTotal = valorDiaria + valorCorridas + valorComissoes + valorMissoes;
-      return { horasTrabalhadas, valorDiaria, valorCorridas, valorComissoes, valorMissoes, valorTotal: isNaN(valorTotal) ? 0 : valorTotal };
-    };
-    const lojasParaRelatorio = filtroLoja ? lojas.filter((l) => l.id === filtroLoja) : lojas;
-    const relatorioMotoboys = motoboys.filter((m) => m.status === "ativo").map((motoboy) => {
-      const jornadasMotoboy = jornadasSemana.filter((j) => j.motoboyId === motoboy.id);
-      const adiantamentosMotoboy = adiantamentosSemana.filter((a) => a.motoboyId === motoboy.id);
-      const totalHoras = jornadasMotoboy.reduce((sum, j) => {
-        const horas = calcularHorasTrabalhadas(j.horasEntrada, j.horasSaida);
-        return sum + (isNaN(horas) ? 0 : horas);
-      }, 0);
-      const totalCorridasAte5km = jornadasMotoboy.reduce((sum, j) => sum + (Number(j.corridasAte5km) || 0), 0);
-      const totalCorridasAcima5km = jornadasMotoboy.reduce((sum, j) => sum + (Number(j.corridasAcima5km) || 0), 0);
-      const totalCorridas = totalCorridasAte5km + totalCorridasAcima5km;
-      const valorBruto = jornadasMotoboy.reduce((sum, j) => {
-        const valorJornada = calcularValorJornada(j);
-        return sum + (isNaN(valorJornada) || valorJornada < 0 ? 0 : valorJornada);
-      }, 0);
-      const totalAdiantamentos = adiantamentosMotoboy.reduce((sum, a) => {
-        const valorAdiantamento = Number(a.valor) || 0;
-        return sum + (valorAdiantamento < 0 ? 0 : valorAdiantamento);
-      }, 0);
-      const valorLiquido = valorBruto - totalAdiantamentos;
-      return {
-        motoboy,
-        totalHoras,
-        totalCorridas,
-        totalCorridasAte5km,
-        totalCorridasAcima5km,
-        valorBruto,
-        totalAdiantamentos,
-        valorLiquido,
-        temAtividade: jornadasMotoboy.length > 0 || adiantamentosMotoboy.length > 0
-      };
-    });
-    const relatorioLojas = lojasParaRelatorio.map((loja) => {
-      const jornadasLoja = jornadasSemana.filter((j) => j.lojaId === loja.id);
-      const valorLogistica = jornadasLoja.reduce((sum, j) => {
-        const valorJornada = calcularValorJornada(j);
-        return sum + (isNaN(valorJornada) || valorJornada < 0 ? 0 : valorJornada);
-      }, 0);
-      const taxaAdministrativa = Number(loja.taxaAdministrativa) || 0;
-      const taxaSupervisao = jornadasLoja.length > 0 ? Number(loja.taxaSupervisao) || 0 : 0;
-      const valorTotal = valorLogistica + taxaAdministrativa + taxaSupervisao;
-      return {
-        loja,
-        jornadasLoja,
-        valorLogistica,
-        comissaoAdministrativa: taxaAdministrativa,
-        taxaSupervisao,
-        valorTotal,
-        temAtividade: jornadasLoja.length > 0
-      };
-    });
-    return /* @__PURE__ */ React.createElement("div", { className: "space-y-6" }, /* @__PURE__ */ React.createElement("div", { className: "flex flex-col gap-4" }, /* @__PURE__ */ React.createElement("div", { className: "flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4" }, /* @__PURE__ */ React.createElement("h2", { className: "text-2xl font-bold" }, "Relat\xF3rios Semanais"), /* @__PURE__ */ React.createElement("div", { className: "flex flex-col sm:flex-row gap-2 items-center" }, /* @__PURE__ */ React.createElement("label", { className: "text-sm font-medium" }, "Semana:"), /* @__PURE__ */ React.createElement(
+    )), /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("label", { className: "block text-xs font-medium text-gray-700 mb-1" }, "Miss\xF5es"), /* @__PURE__ */ React.createElement(
       "input",
       {
-        type: "date",
-        value: selectedWeek,
-        onChange: (e) => setSelectedWeek(e.target.value),
-        className: "border rounded px-3 py-1 focus:outline-none focus:ring-2 focus:ring-blue-500"
+        type: "number",
+        step: "0.01",
+        value: motoboyData.missoes,
+        onChange: (e) => atualizarMotoboyMultiplo(index, "missoes", e.target.value),
+        className: "w-full px-2 py-1 border border-gray-300 rounded text-sm focus:outline-none focus:ring-1 focus:ring-blue-500"
       }
-    ), /* @__PURE__ */ React.createElement("span", { className: "text-xs text-gray-500 ml-2" }, weekStart.toLocaleDateString("pt-BR"), " a ", weekEnd.toLocaleDateString("pt-BR")))), currentUser?.tipo !== "lojista" && /* @__PURE__ */ React.createElement("div", { className: "bg-gray-50 p-4 rounded-lg" }, /* @__PURE__ */ React.createElement("div", { className: "flex flex-col sm:flex-row gap-4 items-start sm:items-center" }, /* @__PURE__ */ React.createElement("label", { className: "text-sm font-medium text-gray-700" }, "Filtrar por Loja:"), /* @__PURE__ */ React.createElement(
-      "select",
+    )), /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("label", { className: "block text-xs font-medium text-gray-700 mb-1" }, "Descontos"), /* @__PURE__ */ React.createElement(
+      "input",
       {
-        value: filtroLoja,
-        onChange: (e) => setFiltroLoja(e.target.value),
-        className: "border rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 min-w-48"
-      },
-      /* @__PURE__ */ React.createElement("option", { value: "" }, "Todas as Lojas"),
-      lojas.filter((loja) => canAccessLoja(loja.id)).map((loja) => /* @__PURE__ */ React.createElement("option", { key: loja.id, value: loja.id }, loja.nome))
-    ), filtroLoja && /* @__PURE__ */ React.createElement(
-      "button",
+        type: "number",
+        step: "0.01",
+        value: motoboyData.descontos,
+        onChange: (e) => atualizarMotoboyMultiplo(index, "descontos", e.target.value),
+        className: "w-full px-2 py-1 border border-gray-300 rounded text-sm focus:outline-none focus:ring-1 focus:ring-blue-500"
+      }
+    ))), /* @__PURE__ */ React.createElement("div", { className: "mt-3" }, /* @__PURE__ */ React.createElement("label", { className: "block text-xs font-medium text-gray-700 mb-1" }, "Observa\xE7\xF5es"), /* @__PURE__ */ React.createElement(
+      "input",
       {
-        onClick: () => setFiltroLoja(""),
-        className: "text-sm text-blue-600 hover:text-blue-800 underline"
-      },
-      "Limpar filtro"
-    ))), currentUser?.tipo === "lojista" && /* @__PURE__ */ React.createElement("div", { className: "bg-blue-50 p-4 rounded-lg" }, /* @__PURE__ */ React.createElement("div", { className: "text-sm text-blue-800" }, /* @__PURE__ */ React.createElement("strong", null, "Visualizando dados da loja:"), " ", lojas.find((l) => l.id === currentUser.lojaId)?.nome || "Loja n\xE3o encontrada"))), /* @__PURE__ */ React.createElement("div", { className: "grid grid-cols-1 md:grid-cols-3 gap-4" }, /* @__PURE__ */ React.createElement("div", { className: "bg-blue-50 border border-blue-200 p-4 rounded-lg" }, /* @__PURE__ */ React.createElement("h3", { className: "text-sm font-medium text-blue-800" }, "Motoboys com Atividade"), /* @__PURE__ */ React.createElement("p", { className: "text-xl font-bold text-blue-600" }, relatorioMotoboys.filter((r) => r.temAtividade).length)), /* @__PURE__ */ React.createElement("div", { className: "bg-green-50 border border-green-200 p-4 rounded-lg" }, /* @__PURE__ */ React.createElement("h3", { className: "text-sm font-medium text-green-800" }, "Lojas com Atividade"), /* @__PURE__ */ React.createElement("p", { className: "text-xl font-bold text-green-600" }, relatorioLojas.filter((r) => r.temAtividade).length)), /* @__PURE__ */ React.createElement("div", { className: "bg-purple-50 border border-purple-200 p-4 rounded-lg" }, /* @__PURE__ */ React.createElement("h3", { className: "text-sm font-medium text-purple-800" }, "Total de Jornadas"), /* @__PURE__ */ React.createElement("p", { className: "text-xl font-bold text-purple-600" }, jornadasSemana.length))), /* @__PURE__ */ React.createElement("div", { className: "bg-white border rounded-lg p-4" }, /* @__PURE__ */ React.createElement("div", { className: "flex justify-between items-center mb-4" }, /* @__PURE__ */ React.createElement("h3", { className: "text-lg font-semibold" }, "Relat\xF3rio de Motoboys"), /* @__PURE__ */ React.createElement("div", { className: "flex gap-2" }, /* @__PURE__ */ React.createElement(
-      "button",
-      {
-        onClick: exportarRelatorioMotoboyCSV,
-        className: "flex items-center gap-2 bg-green-500 text-white px-3 py-1 rounded text-sm hover:bg-green-600 transition-colors"
-      },
-      /* @__PURE__ */ React.createElement(Download, { size: 16 }),
-      "CSV"
-    ), /* @__PURE__ */ React.createElement(
-      "button",
-      {
-        onClick: exportarRelatorioMotoboyPDF,
-        className: "flex items-center gap-2 bg-red-500 text-white px-3 py-1 rounded text-sm hover:bg-red-600 transition-colors"
-      },
-      /* @__PURE__ */ React.createElement(Download, { size: 16 }),
-      "PDF"
-    ))), /* @__PURE__ */ React.createElement("div", { className: "overflow-x-auto" }, /* @__PURE__ */ React.createElement("table", { className: "w-full" }, /* @__PURE__ */ React.createElement("thead", { className: "bg-gray-50" }, /* @__PURE__ */ React.createElement("tr", null, /* @__PURE__ */ React.createElement("th", { className: "px-4 py-3 text-left text-sm font-medium text-gray-700" }, "Motoboy"), /* @__PURE__ */ React.createElement("th", { className: "px-4 py-3 text-left text-sm font-medium text-gray-700" }, "Total Horas"), /* @__PURE__ */ React.createElement("th", { className: "px-4 py-3 text-left text-sm font-medium text-gray-700" }, "Total Corridas"), /* @__PURE__ */ React.createElement("th", { className: "px-4 py-3 text-left text-sm font-medium text-gray-700" }, "\u22645km | >5km"), /* @__PURE__ */ React.createElement("th", { className: "px-4 py-3 text-left text-sm font-medium text-gray-700" }, "Valor Bruto"), /* @__PURE__ */ React.createElement("th", { className: "px-4 py-3 text-left text-sm font-medium text-gray-700" }, "Adiantamentos"), /* @__PURE__ */ React.createElement("th", { className: "px-4 py-3 text-left text-sm font-medium text-gray-700" }, "Valor L\xEDquido"))), /* @__PURE__ */ React.createElement("tbody", { className: "divide-y divide-gray-200" }, relatorioMotoboys.length === 0 ? /* @__PURE__ */ React.createElement("tr", null, /* @__PURE__ */ React.createElement("td", { colSpan: "7", className: "px-4 py-8 text-center text-gray-500" }, "Nenhum motoboy ativo cadastrado")) : relatorioMotoboys.filter((r) => r.temAtividade).length === 0 ? /* @__PURE__ */ React.createElement("tr", null, /* @__PURE__ */ React.createElement("td", { colSpan: "7", className: "px-4 py-8 text-center text-gray-500" }, "Nenhuma atividade registrada para o per\xEDodo selecionado")) : relatorioMotoboys.filter((r) => r.temAtividade).map((relatorio) => /* @__PURE__ */ React.createElement("tr", { key: relatorio.motoboy.id, className: "hover:bg-gray-50" }, /* @__PURE__ */ React.createElement("td", { className: "px-4 py-3" }, relatorio.motoboy.nome), /* @__PURE__ */ React.createElement("td", { className: "px-4 py-3" }, relatorio.totalHoras.toFixed(1), "h"), /* @__PURE__ */ React.createElement("td", { className: "px-4 py-3" }, relatorio.totalCorridas), /* @__PURE__ */ React.createElement("td", { className: "px-4 py-3" }, relatorio.totalCorridasAte5km, " | ", relatorio.totalCorridasAcima5km), /* @__PURE__ */ React.createElement("td", { className: "px-4 py-3" }, "R$ ", relatorio.valorBruto.toFixed(2)), /* @__PURE__ */ React.createElement("td", { className: "px-4 py-3" }, "R$ ", relatorio.totalAdiantamentos.toFixed(2)), /* @__PURE__ */ React.createElement("td", { className: "px-4 py-3 font-semibold" }, "R$ ", relatorio.valorLiquido.toFixed(2)))))))), /* @__PURE__ */ React.createElement("div", { className: "bg-white border rounded-lg p-4" }, /* @__PURE__ */ React.createElement("div", { className: "flex justify-between items-center mb-4" }, /* @__PURE__ */ React.createElement("h3", { className: "text-lg font-semibold" }, "Relat\xF3rio Detalhado de Lojas"), /* @__PURE__ */ React.createElement("div", { className: "flex gap-2" }, /* @__PURE__ */ React.createElement(
-      "button",
-      {
-        onClick: exportarRelatorioLojasCSV,
-        className: "flex items-center gap-2 bg-green-500 text-white px-3 py-1 rounded text-sm hover:bg-green-600 transition-colors"
-      },
-      /* @__PURE__ */ React.createElement(Download, { size: 16 }),
-      "CSV"
-    ), /* @__PURE__ */ React.createElement(
-      "button",
-      {
-        onClick: exportarRelatorioLojasPDF,
-        className: "flex items-center gap-2 bg-red-500 text-white px-3 py-1 rounded text-sm hover:bg-red-600 transition-colors"
-      },
-      /* @__PURE__ */ React.createElement(Download, { size: 16 }),
-      "PDF"
-    ))), relatorioLojas.filter((r) => r.temAtividade).length === 0 ? /* @__PURE__ */ React.createElement("div", { className: "text-center text-gray-500 py-8" }, filtroLoja ? "Nenhuma atividade registrada para a loja selecionada no per\xEDodo." : "Nenhuma atividade registrada para o per\xEDodo selecionado.") : /* @__PURE__ */ React.createElement("div", { className: "space-y-6" }, relatorioLojas.filter((r) => r.temAtividade).map((relatorio) => /* @__PURE__ */ React.createElement("div", { key: relatorio.loja.id, className: "border rounded-lg p-4 bg-gray-50" }, /* @__PURE__ */ React.createElement("div", { className: "mb-4" }, /* @__PURE__ */ React.createElement("div", { className: "flex justify-between items-start mb-2" }, /* @__PURE__ */ React.createElement("h4", { className: "text-lg font-semibold text-gray-800" }, relatorio.loja.nome), /* @__PURE__ */ React.createElement("div", { className: "text-sm text-gray-600" }, "Per\xEDodo: ", weekStart.toLocaleDateString("pt-BR"), " a ", weekEnd.toLocaleDateString("pt-BR"))), /* @__PURE__ */ React.createElement("div", { className: "grid grid-cols-1 md:grid-cols-2 gap-4 text-sm text-gray-600" }, /* @__PURE__ */ React.createElement("div", null, "CNPJ: ", relatorio.loja.cnpj), /* @__PURE__ */ React.createElement("div", null, "Contato: ", relatorio.loja.contato))), /* @__PURE__ */ React.createElement("div", { className: "grid grid-cols-1 md:grid-cols-4 gap-4 mb-4" }, /* @__PURE__ */ React.createElement("div", { className: "bg-blue-50 p-3 rounded border" }, /* @__PURE__ */ React.createElement("div", { className: "text-xs text-blue-600 font-medium" }, "LOG\xCDSTICA"), /* @__PURE__ */ React.createElement("div", { className: "text-lg font-bold text-blue-800" }, "R$ ", relatorio.valorLogistica.toFixed(2))), /* @__PURE__ */ React.createElement("div", { className: "bg-yellow-50 p-3 rounded border" }, /* @__PURE__ */ React.createElement("div", { className: "text-xs text-yellow-600 font-medium" }, "TAXA ADMIN"), /* @__PURE__ */ React.createElement("div", { className: "text-lg font-bold text-yellow-800" }, "R$ ", relatorio.comissaoAdministrativa.toFixed(2))), /* @__PURE__ */ React.createElement("div", { className: "bg-purple-50 p-3 rounded border" }, /* @__PURE__ */ React.createElement("div", { className: "text-xs text-purple-600 font-medium" }, "SUPERVIS\xC3O"), /* @__PURE__ */ React.createElement("div", { className: "text-lg font-bold text-purple-800" }, "R$ ", relatorio.taxaSupervisao.toFixed(2))), /* @__PURE__ */ React.createElement("div", { className: "bg-red-50 p-3 rounded border border-red-300" }, /* @__PURE__ */ React.createElement("div", { className: "text-xs text-red-600 font-medium" }, "TOTAL A PAGAR"), /* @__PURE__ */ React.createElement("div", { className: "text-xl font-bold text-red-800" }, "R$ ", relatorio.valorTotal.toFixed(2)))), /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("h5", { className: "font-medium text-gray-700 mb-2" }, "Detalhamento por Motoboy:"), /* @__PURE__ */ React.createElement("div", { className: "overflow-x-auto" }, /* @__PURE__ */ React.createElement("table", { className: "w-full text-sm" }, /* @__PURE__ */ React.createElement("thead", { className: "bg-white" }, /* @__PURE__ */ React.createElement("tr", null, /* @__PURE__ */ React.createElement("th", { className: "px-3 py-2 text-left text-xs font-medium text-gray-600" }, "Motoboy"), /* @__PURE__ */ React.createElement("th", { className: "px-3 py-2 text-left text-xs font-medium text-gray-600" }, "Total Horas"), /* @__PURE__ */ React.createElement("th", { className: "px-3 py-2 text-left text-xs font-medium text-gray-600" }, "Jornadas"), /* @__PURE__ */ React.createElement("th", { className: "px-3 py-2 text-left text-xs font-medium text-gray-600" }, "\u22645km"), /* @__PURE__ */ React.createElement("th", { className: "px-3 py-2 text-left text-xs font-medium text-gray-600" }, ">5km"), /* @__PURE__ */ React.createElement("th", { className: "px-3 py-2 text-left text-xs font-medium text-gray-600" }, "Valor Corridas"), /* @__PURE__ */ React.createElement("th", { className: "px-3 py-2 text-left text-xs font-medium text-gray-600" }, "Extras"), /* @__PURE__ */ React.createElement("th", { className: "px-3 py-2 text-left text-xs font-medium text-gray-600" }, "Total Pago"))), /* @__PURE__ */ React.createElement("tbody", { className: "divide-y divide-gray-200" }, (() => {
-      const motoboyConsolidado = {};
-      relatorio.jornadasLoja.forEach((jornada) => {
-        const motoboy = motoboys.find((m) => m.id === jornada.motoboyId);
-        const motoboyNome = motoboy?.nome || "N/A";
-        const detalhes = calcularDetalhesJornada(jornada);
-        const totalExtras = detalhes.valorComissoes + detalhes.valorMissoes;
-        if (!motoboyConsolidado[jornada.motoboyId]) {
-          motoboyConsolidado[jornada.motoboyId] = {
-            nome: motoboyNome,
-            totalHoras: 0,
-            totalJornadas: 0,
-            totalCorridasAte5km: 0,
-            totalCorridasAcima5km: 0,
-            totalValorCorridas: 0,
-            totalExtras: 0,
-            totalPago: 0
-          };
-        }
-        motoboyConsolidado[jornada.motoboyId].totalHoras += detalhes.horasTrabalhadas;
-        motoboyConsolidado[jornada.motoboyId].totalJornadas += 1;
-        motoboyConsolidado[jornada.motoboyId].totalCorridasAte5km += jornada.corridasAte5km || 0;
-        motoboyConsolidado[jornada.motoboyId].totalCorridasAcima5km += jornada.corridasAcima5km || 0;
-        motoboyConsolidado[jornada.motoboyId].totalValorCorridas += detalhes.valorCorridas;
-        motoboyConsolidado[jornada.motoboyId].totalExtras += totalExtras;
-        motoboyConsolidado[jornada.motoboyId].totalPago += detalhes.valorTotal;
-      });
-      return Object.values(motoboyConsolidado).map((motoboy, index) => /* @__PURE__ */ React.createElement("tr", { key: index, className: "hover:bg-white" }, /* @__PURE__ */ React.createElement("td", { className: "px-3 py-2 font-medium" }, motoboy.nome), /* @__PURE__ */ React.createElement("td", { className: "px-3 py-2" }, motoboy.totalHoras.toFixed(1), "h"), /* @__PURE__ */ React.createElement("td", { className: "px-3 py-2" }, motoboy.totalJornadas), /* @__PURE__ */ React.createElement("td", { className: "px-3 py-2" }, motoboy.totalCorridasAte5km), /* @__PURE__ */ React.createElement("td", { className: "px-3 py-2" }, motoboy.totalCorridasAcima5km), /* @__PURE__ */ React.createElement("td", { className: "px-3 py-2 text-green-600" }, "R$ ", motoboy.totalValorCorridas.toFixed(2)), /* @__PURE__ */ React.createElement("td", { className: "px-3 py-2 text-purple-600" }, "R$ ", motoboy.totalExtras.toFixed(2)), /* @__PURE__ */ React.createElement("td", { className: "px-3 py-2 font-medium" }, "R$ ", motoboy.totalPago.toFixed(2))));
-    })(), /* @__PURE__ */ React.createElement("tr", { className: "bg-gray-100 font-medium" }, /* @__PURE__ */ React.createElement("td", { className: "px-3 py-2", colSpan: "7" }, "TOTAL LOG\xCDSTICA:"), /* @__PURE__ */ React.createElement("td", { className: "px-3 py-2" }, "R$ ", relatorio.valorLogistica.toFixed(2)))))), /* @__PURE__ */ React.createElement("div", { className: "mt-4 p-4 bg-red-50 border border-red-200 rounded" }, /* @__PURE__ */ React.createElement("div", { className: "text-center" }, /* @__PURE__ */ React.createElement("div", { className: "text-sm text-gray-600 mb-1" }, "VALOR TOTAL A PAGAR PELA LOJA:"), /* @__PURE__ */ React.createElement("div", { className: "text-2xl font-bold text-red-800" }, "R$ ", relatorio.valorTotal.toFixed(2)), /* @__PURE__ */ React.createElement("div", { className: "text-xs text-gray-500 mt-2" }, "(Log\xEDstica: R$ ", relatorio.valorLogistica.toFixed(2), " + Taxa Admin: R$ ", relatorio.comissaoAdministrativa.toFixed(2), " + Supervis\xE3o: R$ ", relatorio.taxaSupervisao.toFixed(2), ")")))))))));
-  };
-  const getAvailableTabs = () => {
-    const allTabs = [
-      { id: "dashboard", label: "Dashboard", icon: FileText, component: Dashboard, permission: "viewDashboard" },
-      { id: "motoboys", label: "Motoboys", icon: Users, component: MotoboysTab, permission: "manageMotoboys" },
-      { id: "lojas", label: "Lojas", icon: Store, component: LojasTab, permission: "manageLojas" },
-      { id: "jornadas", label: "Jornadas", icon: Calendar, component: JornadasTab, permission: "manageJornadas" },
-      { id: "adiantamentos", label: "Adiantamentos", icon: DollarSign, component: AdiantamentosTab, permission: "manageAdiantamentos" },
-      { id: "relatorios", label: "Relat\xF3rios", icon: FileText, component: RelatoriosTab, permission: "viewRelatorios" },
-      { id: "colaboradores", label: "Colaboradores", icon: Users, component: ColaboradoresTab, permission: "manageColaboradores" }
-    ];
-    return allTabs.filter((tab) => hasPermission(tab.permission));
-  };
-  const tabs = getAvailableTabs();
-  const ActiveComponent = tabs.find((tab) => tab.id === activeTab)?.component || Dashboard;
-  if (!isAuthenticated || !currentUser) {
-    return /* @__PURE__ */ React.createElement(LoginScreen, null);
-  }
-  return /* @__PURE__ */ React.createElement("div", { className: "flex flex-col h-screen bg-gray-100" }, /* @__PURE__ */ React.createElement("header", { className: "bg-white shadow-sm border-b" }, /* @__PURE__ */ React.createElement("div", { className: "px-4 py-3 flex items-center justify-between" }, /* @__PURE__ */ React.createElement("div", { className: "flex items-center gap-4" }, /* @__PURE__ */ React.createElement(
-    "img",
-    {
-      src: "assets/JeFG5upo7Hg6wrzGnryGF.jpeg",
-      alt: "Expresso Neves",
-      className: "h-12 w-auto"
-    }
-  ), /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("h1", { className: "text-xl font-bold text-gray-900" }, "Expresso Neves"), /* @__PURE__ */ React.createElement("p", { className: "text-sm text-gray-600" }, "Sistema de Gest\xE3o de Motoboys"))), /* @__PURE__ */ React.createElement("div", { className: "flex items-center gap-4" }, /* @__PURE__ */ React.createElement("div", { className: "text-right" }, /* @__PURE__ */ React.createElement("div", { className: "text-sm font-medium text-gray-900" }, currentUser?.nome), /* @__PURE__ */ React.createElement("div", { className: "text-xs text-gray-500" }, currentUser?.tipo === "admin" && "Administrador", currentUser?.tipo === "financeiro" && "Financeiro", currentUser?.tipo === "lojista" && "Lojista", currentUser?.tipo === "lojista" && currentUser?.lojaId && ` - ${lojas.find((l) => l.id === currentUser.lojaId)?.nome || "Loja n\xE3o encontrada"}`)), /* @__PURE__ */ React.createElement(
+        type: "text",
+        value: motoboyData.observacoes,
+        onChange: (e) => atualizarMotoboyMultiplo(index, "observacoes", e.target.value),
+        className: "w-full px-2 py-1 border border-gray-300 rounded text-sm focus:outline-none focus:ring-1 focus:ring-blue-500",
+        placeholder: "Observa\xE7\xF5es espec\xEDficas para este motoboy..."
+      }
+    )), /* @__PURE__ */ React.createElement("div", { className: "mt-2 text-xs text-gray-600" }, "Total: R$ ", ((motoboyData.valorDiaria || 0) + (motoboyData.valorCorridas || 0) + (motoboyData.comissoes || 0) + (motoboyData.missoes || 0) - (motoboyData.descontos || 0)).toFixed(2)));
+  })))), /* @__PURE__ */ React.createElement("div", { className: "flex gap-4" }, /* @__PURE__ */ React.createElement(
     "button",
     {
-      onClick: logout,
-      className: "flex items-center gap-2 text-gray-600 hover:text-gray-800 transition-colors",
-      title: "Sair"
+      type: "submit",
+      className: "bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 transition-colors"
     },
-    /* @__PURE__ */ React.createElement(Settings, { size: 20 }),
-    "Sair"
-  )))), /* @__PURE__ */ React.createElement("div", { className: "flex flex-1 overflow-hidden" }, /* @__PURE__ */ React.createElement("nav", { className: "w-64 bg-white shadow-sm border-r overflow-y-auto" }, /* @__PURE__ */ React.createElement("div", { className: "p-4" }, /* @__PURE__ */ React.createElement("ul", { className: "space-y-2" }, tabs.map((tab) => {
-    const Icon = tab.icon;
-    return /* @__PURE__ */ React.createElement("li", { key: tab.id }, /* @__PURE__ */ React.createElement(
+    editingJornada ? "Atualizar Jornada" : cadastroMultiplo ? "Cadastrar Jornadas" : "Cadastrar Jornada"
+  ), /* @__PURE__ */ React.createElement(
+    "button",
+    {
+      type: "button",
+      onClick: () => {
+        setShowJornadaForm(false);
+        setEditingJornada(null);
+        setCadastroMultiplo(false);
+      },
+      className: "bg-gray-600 text-white px-4 py-2 rounded-md hover:bg-gray-700 transition-colors"
+    },
+    "Cancelar"
+  ), !editingJornada && /* @__PURE__ */ React.createElement(
+    "button",
+    {
+      type: "button",
+      onClick: () => setCadastroMultiplo(!cadastroMultiplo),
+      className: "bg-purple-600 text-white px-4 py-2 rounded-md hover:bg-purple-700 transition-colors"
+    },
+    cadastroMultiplo ? "Modo Single" : "Modo M\xFAltiplo"
+  )))), /* @__PURE__ */ React.createElement("div", { className: "bg-white rounded-lg shadow" }, /* @__PURE__ */ React.createElement("div", { className: "overflow-x-auto" }, /* @__PURE__ */ React.createElement("table", { className: "min-w-full" }, /* @__PURE__ */ React.createElement("thead", { className: "bg-gray-50" }, /* @__PURE__ */ React.createElement("tr", null, /* @__PURE__ */ React.createElement("th", { className: "px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider" }, "Data"), /* @__PURE__ */ React.createElement("th", { className: "px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider" }, "Motoboy"), /* @__PURE__ */ React.createElement("th", { className: "px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider" }, "Loja"), /* @__PURE__ */ React.createElement("th", { className: "px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider" }, "Hor\xE1rio"), /* @__PURE__ */ React.createElement("th", { className: "px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider" }, "Horas"), /* @__PURE__ */ React.createElement("th", { className: "px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider" }, "Valor Di\xE1ria"), /* @__PURE__ */ React.createElement("th", { className: "px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider" }, "Valor Corridas"), /* @__PURE__ */ React.createElement("th", { className: "px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider" }, "Extras"), /* @__PURE__ */ React.createElement("th", { className: "px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider" }, "Total"), /* @__PURE__ */ React.createElement("th", { className: "px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider" }, "A\xE7\xF5es"))), /* @__PURE__ */ React.createElement("tbody", { className: "bg-white divide-y divide-gray-200" }, jornadasFiltradas.slice().reverse().map((jornada) => {
+    const motoboy = motoboys.find((m) => m.id === jornada.motoboyId);
+    const loja = lojas.find((l) => l.id === jornada.lojaId);
+    const valorTotalCorridas = jornada.valorCorridas || 0;
+    const extras = (jornada.comissoes || 0) + (jornada.missoes || 0);
+    const total = (jornada.valorDiaria || 0) + valorTotalCorridas + extras - (jornada.descontos || 0);
+    return /* @__PURE__ */ React.createElement("tr", { key: jornada.id, className: "hover:bg-gray-50" }, /* @__PURE__ */ React.createElement("td", { className: "px-3 py-2 whitespace-nowrap text-sm text-gray-900" }, (() => {
+      console.log("\u{1F4CA} Exibindo data na tabela:", jornada.data);
+      const dataExibicao = (/* @__PURE__ */ new Date(jornada.data + "T12:00:00")).toLocaleDateString("pt-BR");
+      console.log("\u{1F4CA} Data formatada para exibi\xE7\xE3o:", dataExibicao);
+      return dataExibicao;
+    })()), /* @__PURE__ */ React.createElement("td", { className: "px-3 py-2 whitespace-nowrap text-sm font-medium text-gray-900" }, motoboy?.nome || "N/A"), /* @__PURE__ */ React.createElement("td", { className: "px-3 py-2 whitespace-nowrap text-sm text-gray-500" }, loja?.nome || "N/A"), /* @__PURE__ */ React.createElement("td", { className: "px-3 py-2 whitespace-nowrap text-sm text-gray-500" }, jornada.eFeriado ? "12:00 - 20:00" : "13:00 - 20:00"), /* @__PURE__ */ React.createElement("td", { className: "px-3 py-2 whitespace-nowrap text-sm text-gray-500" }, jornada.eFeriado ? "8,0h" : "6,0h"), /* @__PURE__ */ React.createElement("td", { className: "px-3 py-2 whitespace-nowrap text-sm text-blue-600 font-medium" }, "R$ ", (jornada.valorDiaria || 0).toFixed(2)), /* @__PURE__ */ React.createElement("td", { className: "px-3 py-2 whitespace-nowrap text-sm text-green-600 font-medium" }, "R$ ", valorTotalCorridas.toFixed(2)), /* @__PURE__ */ React.createElement("td", { className: "px-3 py-2 whitespace-nowrap text-sm text-gray-600" }, "R$ ", extras.toFixed(2)), /* @__PURE__ */ React.createElement("td", { className: "px-3 py-2 whitespace-nowrap text-sm text-red-600 font-medium" }, "R$ ", total.toFixed(2)), /* @__PURE__ */ React.createElement("td", { className: "px-3 py-2 whitespace-nowrap text-sm" }, /* @__PURE__ */ React.createElement("div", { className: "flex gap-1" }, /* @__PURE__ */ React.createElement(
       "button",
       {
-        onClick: () => setActiveTab(tab.id),
-        className: `w-full flex items-center gap-3 px-3 py-2 rounded-lg text-left transition-colors ${activeTab === tab.id ? "bg-blue-50 text-blue-700 border border-blue-200" : "text-gray-700 hover:bg-gray-50"}`
+        onClick: () => editJornada(jornada),
+        className: "text-blue-600 hover:text-blue-800 text-xs",
+        title: "Editar jornada"
       },
-      /* @__PURE__ */ React.createElement(Icon, { size: 20 }),
-      tab.label
-    ));
-  })))), /* @__PURE__ */ React.createElement("main", { className: "flex-1 overflow-y-auto p-6" }, /* @__PURE__ */ React.createElement(ActiveComponent, null))), /* @__PURE__ */ React.createElement(MotoboyModal, null), /* @__PURE__ */ React.createElement(LojaModal, null), /* @__PURE__ */ React.createElement(JornadaModal, null), /* @__PURE__ */ React.createElement(AdiantamentoModal, null), /* @__PURE__ */ React.createElement(ColaboradorModal, null));
+      /* @__PURE__ */ React.createElement("svg", { className: "w-4 h-4", fill: "none", stroke: "currentColor", viewBox: "0 0 24 24" }, /* @__PURE__ */ React.createElement("path", { strokeLinecap: "round", strokeLinejoin: "round", strokeWidth: "2", d: "M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" }))
+    ), /* @__PURE__ */ React.createElement(
+      "button",
+      {
+        onClick: () => deleteJornada(jornada.id),
+        className: "text-red-600 hover:text-red-800 text-xs",
+        title: "Excluir jornada"
+      },
+      /* @__PURE__ */ React.createElement("svg", { className: "w-4 h-4", fill: "none", stroke: "currentColor", viewBox: "0 0 24 24" }, /* @__PURE__ */ React.createElement("path", { strokeLinecap: "round", strokeLinejoin: "round", strokeWidth: "2", d: "M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" }))
+    ))));
+  })))), jornadasFiltradas.length === 0 && /* @__PURE__ */ React.createElement("div", { className: "text-center py-8 text-gray-500" }, jornadas.length === 0 ? "Nenhuma jornada cadastrada ainda." : "Nenhuma jornada encontrada com os filtros aplicados."))), activeTab === "adiantamentos" && ["admin", "financeiro"].includes(currentUser.tipo) && /* @__PURE__ */ React.createElement("div", { className: "space-y-6" }, /* @__PURE__ */ React.createElement("div", { className: "flex justify-between items-center" }, /* @__PURE__ */ React.createElement("h2", { className: "text-3xl font-bold text-gray-900" }, "Adiantamentos")), /* @__PURE__ */ React.createElement("div", { className: "bg-white rounded-lg shadow p-6" }, /* @__PURE__ */ React.createElement("h3", { className: "text-lg font-medium text-gray-900 mb-4" }, "Cadastrar Novo Adiantamento"), /* @__PURE__ */ React.createElement("form", { onSubmit: addAdiantamento, className: "grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("label", { className: "block text-sm font-medium text-gray-700 mb-2" }, "Motoboy"), /* @__PURE__ */ React.createElement(
+    "select",
+    {
+      value: adiantamentoForm.motoboyId,
+      onChange: (e) => setAdiantamentoForm({ ...adiantamentoForm, motoboyId: e.target.value }),
+      className: "w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500",
+      required: true
+    },
+    /* @__PURE__ */ React.createElement("option", { value: "" }, "Selecione um motoboy"),
+    motoboys.filter((m) => m.status === "ativo").map((motoboy) => /* @__PURE__ */ React.createElement("option", { key: motoboy.id, value: motoboy.id }, motoboy.nome))
+  )), /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("label", { className: "block text-sm font-medium text-gray-700 mb-2" }, "Loja"), /* @__PURE__ */ React.createElement(
+    "select",
+    {
+      value: adiantamentoForm.lojaId,
+      onChange: (e) => setAdiantamentoForm({ ...adiantamentoForm, lojaId: e.target.value }),
+      className: "w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500",
+      required: true
+    },
+    /* @__PURE__ */ React.createElement("option", { value: "" }, "Selecione uma loja"),
+    lojas.map((loja) => /* @__PURE__ */ React.createElement("option", { key: loja.id, value: loja.id }, loja.nome))
+  )), /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("label", { className: "block text-sm font-medium text-gray-700 mb-2" }, "Valor"), /* @__PURE__ */ React.createElement(
+    "input",
+    {
+      type: "number",
+      step: "0.01",
+      value: adiantamentoForm.valor,
+      onChange: (e) => setAdiantamentoForm({ ...adiantamentoForm, valor: parseFloat(e.target.value) }),
+      className: "w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500",
+      required: true
+    }
+  )), /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("label", { className: "block text-sm font-medium text-gray-700 mb-2" }, "Data"), /* @__PURE__ */ React.createElement(
+    "input",
+    {
+      type: "date",
+      value: adiantamentoForm.data,
+      onChange: (e) => setAdiantamentoForm({ ...adiantamentoForm, data: e.target.value }),
+      className: "w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500",
+      required: true
+    }
+  )), /* @__PURE__ */ React.createElement("div", { className: "md:col-span-2 lg:col-span-4" }, /* @__PURE__ */ React.createElement("label", { className: "block text-sm font-medium text-gray-700 mb-2" }, "Observa\xE7\xE3o"), /* @__PURE__ */ React.createElement(
+    "input",
+    {
+      type: "text",
+      value: adiantamentoForm.observacao,
+      onChange: (e) => setAdiantamentoForm({ ...adiantamentoForm, observacao: e.target.value }),
+      className: "w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+    }
+  )), /* @__PURE__ */ React.createElement("div", { className: "md:col-span-2 lg:col-span-4" }, /* @__PURE__ */ React.createElement(
+    "button",
+    {
+      type: "submit",
+      className: "bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 transition-colors"
+    },
+    "Cadastrar Adiantamento"
+  )))), /* @__PURE__ */ React.createElement("div", { className: "bg-white rounded-lg shadow overflow-hidden" }, /* @__PURE__ */ React.createElement("table", { className: "min-w-full divide-y divide-gray-200" }, /* @__PURE__ */ React.createElement("thead", { className: "bg-gray-50" }, /* @__PURE__ */ React.createElement("tr", null, /* @__PURE__ */ React.createElement("th", { className: "px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider" }, "Data"), /* @__PURE__ */ React.createElement("th", { className: "px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider" }, "Motoboy"), /* @__PURE__ */ React.createElement("th", { className: "px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider" }, "Loja"), /* @__PURE__ */ React.createElement("th", { className: "px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider" }, "Valor"), /* @__PURE__ */ React.createElement("th", { className: "px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider" }, "Observa\xE7\xE3o"))), /* @__PURE__ */ React.createElement("tbody", { className: "bg-white divide-y divide-gray-200" }, adiantamentos.slice().reverse().map((adiantamento) => {
+    const motoboy = motoboys.find((m) => m.id === adiantamento.motoboyId);
+    const loja = lojas.find((l) => l.id === adiantamento.lojaId);
+    return /* @__PURE__ */ React.createElement("tr", { key: adiantamento.id }, /* @__PURE__ */ React.createElement("td", { className: "px-6 py-4 whitespace-nowrap text-sm text-gray-900" }, adiantamento.data), /* @__PURE__ */ React.createElement("td", { className: "px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900" }, motoboy?.nome), /* @__PURE__ */ React.createElement("td", { className: "px-6 py-4 whitespace-nowrap text-sm text-gray-500" }, loja?.nome), /* @__PURE__ */ React.createElement("td", { className: "px-6 py-4 whitespace-nowrap text-sm text-gray-500" }, "R$ ", adiantamento.valor.toFixed(2)), /* @__PURE__ */ React.createElement("td", { className: "px-6 py-4 whitespace-nowrap text-sm text-gray-500" }, adiantamento.observacao));
+  }))), adiantamentos.length === 0 && /* @__PURE__ */ React.createElement("div", { className: "text-center py-8 text-gray-500" }, "Nenhum adiantamento cadastrado ainda."))), activeTab === "debitos" && ["admin", "financeiro"].includes(currentUser.tipo) && /* @__PURE__ */ React.createElement("div", { className: "space-y-6" }, /* @__PURE__ */ React.createElement("div", { className: "flex justify-between items-center" }, /* @__PURE__ */ React.createElement("h2", { className: "text-3xl font-bold text-gray-900" }, "D\xE9bitos Pendentes"), /* @__PURE__ */ React.createElement("div", { className: "flex gap-2" }, /* @__PURE__ */ React.createElement(
+    "button",
+    {
+      onClick: exportarDebitosPDF,
+      className: "bg-red-600 text-white px-4 py-2 rounded-md hover:bg-red-700 transition-colors flex items-center gap-2"
+    },
+    /* @__PURE__ */ React.createElement("svg", { className: "w-4 h-4", fill: "none", stroke: "currentColor", viewBox: "0 0 24 24" }, /* @__PURE__ */ React.createElement("path", { strokeLinecap: "round", strokeLinejoin: "round", strokeWidth: "2", d: "M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" })),
+    "Exportar PDF"
+  ), /* @__PURE__ */ React.createElement(
+    "button",
+    {
+      onClick: exportarDebitosCSV,
+      className: "bg-green-600 text-white px-4 py-2 rounded-md hover:bg-green-700 transition-colors flex items-center gap-2"
+    },
+    /* @__PURE__ */ React.createElement("svg", { className: "w-4 h-4", fill: "none", stroke: "currentColor", viewBox: "0 0 24 24" }, /* @__PURE__ */ React.createElement("path", { strokeLinecap: "round", strokeLinejoin: "round", strokeWidth: "2", d: "M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" })),
+    "Exportar CSV"
+  ))), /* @__PURE__ */ React.createElement("div", { className: "bg-white rounded-lg shadow p-6" }, /* @__PURE__ */ React.createElement("h3", { className: "text-lg font-medium text-gray-900 mb-4" }, editingDebito ? "Editar D\xE9bito" : "Cadastrar Novo D\xE9bito"), /* @__PURE__ */ React.createElement("form", { onSubmit: addDebito, className: "grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("label", { className: "block text-sm font-medium text-gray-700 mb-2" }, "Loja"), /* @__PURE__ */ React.createElement(
+    "select",
+    {
+      value: debitoForm.lojaId,
+      onChange: (e) => setDebitoForm({ ...debitoForm, lojaId: e.target.value }),
+      className: "w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500",
+      required: true
+    },
+    /* @__PURE__ */ React.createElement("option", { value: "" }, "Selecione uma loja"),
+    lojas.map((loja) => /* @__PURE__ */ React.createElement("option", { key: loja.id, value: loja.id }, loja.nome))
+  )), /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("label", { className: "block text-sm font-medium text-gray-700 mb-2" }, "Descri\xE7\xE3o"), /* @__PURE__ */ React.createElement(
+    "input",
+    {
+      type: "text",
+      value: debitoForm.descricao,
+      onChange: (e) => setDebitoForm({ ...debitoForm, descricao: e.target.value }),
+      className: "w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500",
+      required: true
+    }
+  )), /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("label", { className: "block text-sm font-medium text-gray-700 mb-2" }, "Valor"), /* @__PURE__ */ React.createElement(
+    "input",
+    {
+      type: "number",
+      step: "0.01",
+      value: debitoForm.valor,
+      onChange: (e) => setDebitoForm({ ...debitoForm, valor: parseFloat(e.target.value) }),
+      className: "w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500",
+      required: true
+    }
+  )), /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("label", { className: "block text-sm font-medium text-gray-700 mb-2" }, "Data Vencimento"), /* @__PURE__ */ React.createElement(
+    "input",
+    {
+      type: "date",
+      value: debitoForm.dataVencimento,
+      onChange: (e) => setDebitoForm({ ...debitoForm, dataVencimento: e.target.value }),
+      className: "w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500",
+      required: true
+    }
+  )), /* @__PURE__ */ React.createElement("div", { className: "md:col-span-2 lg:col-span-4" }, /* @__PURE__ */ React.createElement("div", { className: "flex gap-4" }, /* @__PURE__ */ React.createElement(
+    "button",
+    {
+      type: "submit",
+      className: "bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 transition-colors"
+    },
+    editingDebito ? "Atualizar D\xE9bito" : "Cadastrar D\xE9bito"
+  ), editingDebito && /* @__PURE__ */ React.createElement(
+    "button",
+    {
+      type: "button",
+      onClick: cancelarEdicaoDebito,
+      className: "bg-gray-600 text-white px-4 py-2 rounded-md hover:bg-gray-700 transition-colors"
+    },
+    "Cancelar"
+  ))))), /* @__PURE__ */ React.createElement("div", { className: "bg-white rounded-lg shadow overflow-hidden" }, /* @__PURE__ */ React.createElement("table", { className: "min-w-full divide-y divide-gray-200" }, /* @__PURE__ */ React.createElement("thead", { className: "bg-gray-50" }, /* @__PURE__ */ React.createElement("tr", null, /* @__PURE__ */ React.createElement("th", { className: "px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider" }, "Loja"), /* @__PURE__ */ React.createElement("th", { className: "px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider" }, "Descri\xE7\xE3o"), /* @__PURE__ */ React.createElement("th", { className: "px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider" }, "Valor"), /* @__PURE__ */ React.createElement("th", { className: "px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider" }, "Vencimento"), /* @__PURE__ */ React.createElement("th", { className: "px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider" }, "Status"), /* @__PURE__ */ React.createElement("th", { className: "px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider" }, "A\xE7\xF5es"))), /* @__PURE__ */ React.createElement("tbody", { className: "bg-white divide-y divide-gray-200" }, debitosPendentes.slice().reverse().map((debito) => {
+    const loja = lojas.find((l) => l.id === debito.lojaId);
+    const isVencido = new Date(debito.dataVencimento) < /* @__PURE__ */ new Date();
+    return /* @__PURE__ */ React.createElement("tr", { key: debito.id, className: isVencido ? "bg-red-50" : "" }, /* @__PURE__ */ React.createElement("td", { className: "px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900" }, loja?.nome), /* @__PURE__ */ React.createElement("td", { className: "px-6 py-4 whitespace-nowrap text-sm text-gray-500" }, debito.descricao), /* @__PURE__ */ React.createElement("td", { className: "px-6 py-4 whitespace-nowrap text-sm text-gray-500" }, "R$ ", debito.valor.toFixed(2)), /* @__PURE__ */ React.createElement("td", { className: "px-6 py-4 whitespace-nowrap text-sm text-gray-500" }, debito.dataVencimento), /* @__PURE__ */ React.createElement("td", { className: "px-6 py-4 whitespace-nowrap" }, /* @__PURE__ */ React.createElement("span", { className: `inline-flex px-2 py-1 text-xs font-semibold rounded-full ${debito.status === "pendente" ? isVencido ? "bg-red-100 text-red-800" : "bg-yellow-100 text-yellow-800" : debito.status === "pago" ? "bg-green-100 text-green-800" : "bg-gray-100 text-gray-800"}` }, debito.status, " ", isVencido && debito.status === "pendente" ? "(Vencido)" : "")), /* @__PURE__ */ React.createElement("td", { className: "px-6 py-4 whitespace-nowrap text-sm font-medium" }, /* @__PURE__ */ React.createElement("div", { className: "flex gap-2" }, /* @__PURE__ */ React.createElement(
+      "button",
+      {
+        onClick: () => editDebito(debito),
+        className: "text-blue-600 hover:text-blue-900"
+      },
+      "Editar"
+    ), debito.status === "pendente" && /* @__PURE__ */ React.createElement(
+      "button",
+      {
+        onClick: async () => {
+          const novosDebitos = debitosPendentes.map(
+            (d) => d.id === debito.id ? { ...d, status: "pago" } : d
+          );
+          setDebitosPendentes(novosDebitos);
+        },
+        className: "text-green-600 hover:text-green-900"
+      },
+      "Marcar como Pago"
+    ), /* @__PURE__ */ React.createElement(
+      "button",
+      {
+        onClick: async () => {
+          toast((t) => /* @__PURE__ */ React.createElement("div", { className: "flex flex-col items-center" }, /* @__PURE__ */ React.createElement("span", { className: "mb-3" }, "Tem certeza que deseja excluir este d\xE9bito?"), /* @__PURE__ */ React.createElement("div", { className: "flex gap-2" }, /* @__PURE__ */ React.createElement(
+            "button",
+            {
+              onClick: () => {
+                const novosDebitos = debitosPendentes.filter((d) => d.id !== debito.id);
+                setDebitosPendentes(novosDebitos);
+                toast.dismiss(t.id);
+                toast.success("D\xE9bito exclu\xEDdo com sucesso!");
+              },
+              className: "bg-red-600 text-white px-3 py-1 rounded text-sm hover:bg-red-700"
+            },
+            "Excluir"
+          ), /* @__PURE__ */ React.createElement(
+            "button",
+            {
+              onClick: () => toast.dismiss(t.id),
+              className: "bg-gray-600 text-white px-3 py-1 rounded text-sm hover:bg-gray-700"
+            },
+            "Cancelar"
+          ))), {
+            duration: 1e4
+          });
+        },
+        className: "text-red-600 hover:text-red-900"
+      },
+      "Excluir"
+    ))));
+  }))), debitosPendentes.length === 0 && /* @__PURE__ */ React.createElement("div", { className: "text-center py-8 text-gray-500" }, "Nenhum d\xE9bito cadastrado ainda."))), activeTab === "relatorios" && ["admin", "financeiro", "lojista"].includes(currentUser.tipo) && /* @__PURE__ */ React.createElement("div", { className: "space-y-6" }, /* @__PURE__ */ React.createElement("div", { className: "flex justify-between items-center" }, /* @__PURE__ */ React.createElement("h2", { className: "text-3xl font-bold text-gray-900" }, "Relat\xF3rios por Per\xEDodo"), relatorioLojas.length > 0 && /* @__PURE__ */ React.createElement(
+    "button",
+    {
+      onClick: gerarPDFTodos,
+      className: "bg-red-600 text-white px-6 py-2 rounded-md hover:bg-red-700 transition-colors flex items-center gap-2"
+    },
+    /* @__PURE__ */ React.createElement("svg", { className: "w-5 h-5", fill: "none", stroke: "currentColor", viewBox: "0 0 24 24" }, /* @__PURE__ */ React.createElement("path", { strokeLinecap: "round", strokeLinejoin: "round", strokeWidth: "2", d: "M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" })),
+    "Exportar Todos (PDF)"
+  )), /* @__PURE__ */ React.createElement("div", { className: "bg-white rounded-lg shadow p-6" }, /* @__PURE__ */ React.createElement("h3", { className: "text-lg font-medium text-gray-900 mb-4" }, "Gerar Relat\xF3rio"), /* @__PURE__ */ React.createElement("div", { className: "flex gap-4 items-end" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("label", { className: "block text-sm font-medium text-gray-700 mb-2" }, "Data In\xEDcio"), /* @__PURE__ */ React.createElement(
+    "input",
+    {
+      type: "date",
+      value: relatorioConfig.dataInicio,
+      onChange: (e) => setRelatorioConfig({ ...relatorioConfig, dataInicio: e.target.value }),
+      className: "px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+    }
+  )), /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("label", { className: "block text-sm font-medium text-gray-700 mb-2" }, "Data Fim"), /* @__PURE__ */ React.createElement(
+    "input",
+    {
+      type: "date",
+      value: relatorioConfig.dataFim,
+      onChange: (e) => setRelatorioConfig({ ...relatorioConfig, dataFim: e.target.value }),
+      className: "px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+    }
+  )), /* @__PURE__ */ React.createElement(
+    "button",
+    {
+      onClick: gerarRelatorios,
+      className: "bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 transition-colors"
+    },
+    "Gerar Relat\xF3rios"
+  ))), getDebitosFiltrados().length > 0 && /* @__PURE__ */ React.createElement("div", { className: "bg-yellow-50 border border-yellow-200 rounded-lg p-4" }, /* @__PURE__ */ React.createElement("h4", { className: "font-medium text-yellow-800 mb-2" }, "\u{1F50D} Debug - D\xE9bitos no Sistema:"), /* @__PURE__ */ React.createElement("div", { className: "text-sm text-yellow-700" }, /* @__PURE__ */ React.createElement("p", null, "Total de d\xE9bitos: ", getDebitosFiltrados().length), /* @__PURE__ */ React.createElement("p", null, "D\xE9bitos pendentes: ", getDebitosFiltrados().filter((d) => d.status === "pendente").length), /* @__PURE__ */ React.createElement("div", { className: "mt-2 max-h-32 overflow-y-auto" }, getDebitosFiltrados().filter((d) => d.status === "pendente").map((debito) => {
+    const loja = getLojasFiltradas().find((l) => l.id === debito.lojaId);
+    return /* @__PURE__ */ React.createElement("div", { key: debito.id, className: "flex justify-between text-xs border-b border-yellow-200 py-1" }, /* @__PURE__ */ React.createElement("span", null, loja?.nome, " - ", debito.descricao), /* @__PURE__ */ React.createElement("span", null, "R$ ", debito.valor.toFixed(2)));
+  })))), relatorioLojas.length > 0 && /* @__PURE__ */ React.createElement("div", { className: "space-y-8" }, /* @__PURE__ */ React.createElement("div", { className: "grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6" }, /* @__PURE__ */ React.createElement("div", { className: "bg-blue-500 text-white rounded-lg p-6" }, /* @__PURE__ */ React.createElement("h3", { className: "text-sm font-medium mb-2" }, "Faturamento Total"), /* @__PURE__ */ React.createElement("p", { className: "text-2xl font-bold" }, "R$ ", relatorioLojas.reduce((sum, grupo) => sum + grupo.totais.final, 0).toFixed(2))), /* @__PURE__ */ React.createElement("div", { className: "bg-green-500 text-white rounded-lg p-6" }, /* @__PURE__ */ React.createElement("h3", { className: "text-sm font-medium mb-2" }, "Total de Corridas"), /* @__PURE__ */ React.createElement("p", { className: "text-2xl font-bold" }, "R$ ", relatorioLojas.reduce((sum, grupo) => sum + grupo.motoboys.reduce((mbSum, mb) => mbSum + (mb.valorCorridas || 0), 0), 0).toFixed(2))), /* @__PURE__ */ React.createElement("div", { className: "bg-yellow-500 text-white rounded-lg p-6" }, /* @__PURE__ */ React.createElement("h3", { className: "text-sm font-medium mb-2" }, "Jornadas Realizadas"), /* @__PURE__ */ React.createElement("p", { className: "text-2xl font-bold" }, relatorioLojas.reduce((sum, grupo) => sum + grupo.motoboys.reduce((mbSum, mb) => mbSum + mb.jornadas.length, 0), 0))), /* @__PURE__ */ React.createElement("div", { className: "bg-purple-500 text-white rounded-lg p-6" }, /* @__PURE__ */ React.createElement("h3", { className: "text-sm font-medium mb-2" }, "Lojas Atendidas"), /* @__PURE__ */ React.createElement("p", { className: "text-2xl font-bold" }, relatorioLojas.length))), /* @__PURE__ */ React.createElement("div", { className: "flex justify-between items-center" }, /* @__PURE__ */ React.createElement("h3", { className: "text-xl font-semibold text-gray-900" }, "Relat\xF3rio por Loja"), /* @__PURE__ */ React.createElement("div", { className: "text-sm text-gray-600" }, "Per\xEDodo: ", (/* @__PURE__ */ new Date(relatorioLojas[0]?.periodo.inicio + "T12:00:00")).toLocaleDateString("pt-BR"), " at\xE9 ", (/* @__PURE__ */ new Date(relatorioLojas[0]?.periodo.fim + "T12:00:00")).toLocaleDateString("pt-BR"))), (() => {
+    const periodoSemanaAtual = obterPeriodoSemanaAtual();
+    const hoje = (/* @__PURE__ */ new Date()).toISOString().split("T")[0];
+    const adiantamentosSemanaAtual = getAdiantamentosFiltrados().filter(
+      (a) => a.data >= periodoSemanaAtual.inicio && a.data <= periodoSemanaAtual.fim && a.data >= periodoSemanaAtual.inicio && a.data <= hoje
+      // Só até hoje
+    );
+    if (adiantamentosSemanaAtual.length > 0) {
+      return /* @__PURE__ */ React.createElement("div", { className: "bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6" }, /* @__PURE__ */ React.createElement("h4", { className: "font-medium text-blue-800 mb-2" }, "\u{1F4C5} Adiantamentos da Semana Atual Inclu\xEDdos"), /* @__PURE__ */ React.createElement("p", { className: "text-sm text-blue-700" }, "Adiantamentos do per\xEDodo de ", /* @__PURE__ */ React.createElement("strong", null, (/* @__PURE__ */ new Date(periodoSemanaAtual.inicio + "T12:00:00")).toLocaleDateString("pt-BR")), " at\xE9 ", /* @__PURE__ */ React.createElement("strong", null, (/* @__PURE__ */ new Date(periodoSemanaAtual.fim + "T12:00:00")).toLocaleDateString("pt-BR")), " est\xE3o sendo automaticamente inclu\xEDdos nos relat\xF3rios para desconto dos motoboys."), /* @__PURE__ */ React.createElement("p", { className: "text-xs text-blue-600 mt-1" }, "Total de adiantamentos da semana atual: ", adiantamentosSemanaAtual.length, " | Valor total: R$ ", adiantamentosSemanaAtual.reduce((sum, a) => sum + (a.valor || 0), 0).toFixed(2)));
+    }
+    return null;
+  })(), relatorioLojas.map((grupo) => /* @__PURE__ */ React.createElement("div", { key: grupo.loja.id, className: "bg-white rounded-lg shadow-lg overflow-hidden border border-gray-200" }, /* @__PURE__ */ React.createElement("div", { className: "px-6 py-4 bg-blue-50 border-b border-gray-200 flex justify-between items-center" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("h3", { className: "text-lg font-semibold text-gray-900" }, grupo.loja.nome), /* @__PURE__ */ React.createElement("p", { className: "text-sm text-gray-600" }, "CNPJ: ", grupo.loja.cnpj, " | Contato: ", grupo.loja.contato), /* @__PURE__ */ React.createElement("p", { className: "text-sm text-blue-600 font-medium mt-1" }, "Per\xEDodo: ", (/* @__PURE__ */ new Date(grupo.periodo.inicio + "T12:00:00")).toLocaleDateString("pt-BR"), " at\xE9 ", (/* @__PURE__ */ new Date(grupo.periodo.fim + "T12:00:00")).toLocaleDateString("pt-BR"))), /* @__PURE__ */ React.createElement(
+    "button",
+    {
+      onClick: () => gerarPDF(grupo),
+      className: "bg-green-600 text-white px-4 py-2 rounded-md hover:bg-green-700 transition-colors flex items-center gap-2"
+    },
+    /* @__PURE__ */ React.createElement("svg", { className: "w-4 h-4", fill: "none", stroke: "currentColor", viewBox: "0 0 24 24" }, /* @__PURE__ */ React.createElement("path", { strokeLinecap: "round", strokeLinejoin: "round", strokeWidth: "2", d: "M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" })),
+    "Gerar PDF"
+  )), /* @__PURE__ */ React.createElement("div", { className: "p-6" }, /* @__PURE__ */ React.createElement("div", { className: "grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6" }, /* @__PURE__ */ React.createElement("div", { className: "bg-blue-100 p-4 rounded-lg" }, /* @__PURE__ */ React.createElement("p", { className: "text-xs font-medium text-blue-600 uppercase" }, "LOG\xCDSTICA"), /* @__PURE__ */ React.createElement("p", { className: "text-lg font-bold text-blue-800" }, "R$ ", grupo.totais.liquido.toFixed(2))), /* @__PURE__ */ React.createElement("div", { className: "bg-orange-100 p-4 rounded-lg" }, /* @__PURE__ */ React.createElement("p", { className: "text-xs font-medium text-orange-600 uppercase" }, "TAXA ADMIN", grupo.loja.usarTaxaPercentual && grupo.totais.liquido > (grupo.loja.limiteValorFixo || 0) ? ` (${grupo.loja.percentualTaxa}%)` : " (FIXA)"), /* @__PURE__ */ React.createElement("p", { className: "text-lg font-bold text-orange-800" }, "R$ ", grupo.totais.taxaAdmin.toFixed(2))), /* @__PURE__ */ React.createElement("div", { className: "bg-purple-100 p-4 rounded-lg" }, /* @__PURE__ */ React.createElement("p", { className: "text-xs font-medium text-purple-600 uppercase" }, "SUPERVIS\xC3O"), /* @__PURE__ */ React.createElement("p", { className: "text-lg font-bold text-purple-800" }, "R$ ", grupo.totais.taxaSupervisao.toFixed(2))), /* @__PURE__ */ React.createElement("div", { className: "bg-red-100 p-4 rounded-lg" }, /* @__PURE__ */ React.createElement("p", { className: "text-xs font-medium text-red-600 uppercase" }, "D\xC9BITOS PENDENTES (", grupo.debitos.length, ")"), /* @__PURE__ */ React.createElement("p", { className: "text-lg font-bold text-red-800" }, "R$ ", grupo.totais.debitos.toFixed(2)))), /* @__PURE__ */ React.createElement("h4", { className: "font-semibold text-gray-900 mb-4" }, "Detalhamento por Motoboy:"), /* @__PURE__ */ React.createElement("div", { className: "overflow-x-auto mb-6" }, /* @__PURE__ */ React.createElement("table", { className: "min-w-full" }, /* @__PURE__ */ React.createElement("thead", null, /* @__PURE__ */ React.createElement("tr", { className: "bg-gray-50" }, /* @__PURE__ */ React.createElement("th", { className: "px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase" }, "MOTOBOY"), /* @__PURE__ */ React.createElement("th", { className: "px-3 py-2 text-center text-xs font-medium text-gray-500 uppercase" }, "SEG"), /* @__PURE__ */ React.createElement("th", { className: "px-3 py-2 text-center text-xs font-medium text-gray-500 uppercase" }, "TER"), /* @__PURE__ */ React.createElement("th", { className: "px-3 py-2 text-center text-xs font-medium text-gray-500 uppercase" }, "QUA"), /* @__PURE__ */ React.createElement("th", { className: "px-3 py-2 text-center text-xs font-medium text-gray-500 uppercase" }, "QUI"), /* @__PURE__ */ React.createElement("th", { className: "px-3 py-2 text-center text-xs font-medium text-gray-500 uppercase" }, "SEX"), /* @__PURE__ */ React.createElement("th", { className: "px-3 py-2 text-center text-xs font-medium text-gray-500 uppercase" }, "SAB"), /* @__PURE__ */ React.createElement("th", { className: "px-3 py-2 text-center text-xs font-medium text-gray-500 uppercase" }, "DOM"), /* @__PURE__ */ React.createElement("th", { className: "px-3 py-2 text-center text-xs font-medium text-gray-500 uppercase" }, "VALOR DI\xC1RIA"), /* @__PURE__ */ React.createElement("th", { className: "px-3 py-2 text-center text-xs font-medium text-gray-500 uppercase" }, "TAXA"), /* @__PURE__ */ React.createElement("th", { className: "px-3 py-2 text-center text-xs font-medium text-gray-500 uppercase" }, "MISS\xD5ES"), /* @__PURE__ */ React.createElement("th", { className: "px-3 py-2 text-center text-xs font-medium text-gray-500 uppercase" }, "DESCONTOS"), /* @__PURE__ */ React.createElement("th", { className: "px-3 py-2 text-center text-xs font-medium text-gray-500 uppercase" }, "TOTAL"))), /* @__PURE__ */ React.createElement("tbody", { className: "divide-y divide-gray-200" }, grupo.motoboys.map((motoboy) => {
+    const jornadasPorDia = {};
+    motoboy.jornadas.forEach((jornada) => {
+      const data = /* @__PURE__ */ new Date(jornada.data + "T12:00:00");
+      const diaSemana = data.getDay();
+      jornadasPorDia[diaSemana] = jornada;
+    });
+    return /* @__PURE__ */ React.createElement("tr", { key: `${motoboy.id}-${motoboy.motoboy.id}`, className: "hover:bg-gray-50" }, /* @__PURE__ */ React.createElement("td", { className: "px-3 py-2 text-sm font-medium text-gray-900" }, motoboy.motoboy.nome), [1, 2, 3, 4, 5, 6, 0].map((dia) => {
+      const jornada = jornadasPorDia[dia];
+      if (!jornada) {
+        return /* @__PURE__ */ React.createElement("td", { key: dia, className: "px-3 py-2 text-center text-sm" }, /* @__PURE__ */ React.createElement("span", { className: "text-gray-400" }, "-"));
+      }
+      const valorTotalCorridasDia = jornada.valorCorridas || 0;
+      return /* @__PURE__ */ React.createElement("td", { key: dia, className: "px-3 py-2 text-center text-sm" }, /* @__PURE__ */ React.createElement("span", { className: "text-green-600 font-medium" }, "R$ ", valorTotalCorridasDia.toFixed(0)));
+    }), /* @__PURE__ */ React.createElement("td", { className: "px-3 py-2 text-center text-sm font-medium text-blue-600" }, "R$ ", motoboy.valorDiaria.toFixed(2)), /* @__PURE__ */ React.createElement("td", { className: "px-3 py-2 text-center text-sm text-green-600" }, "R$ ", motoboy.totalCorridas.toFixed(2)), /* @__PURE__ */ React.createElement("td", { className: "px-3 py-2 text-center text-sm" }, "R$ ", (motoboy.comissoes + motoboy.missoes).toFixed(2)), /* @__PURE__ */ React.createElement("td", { className: "px-3 py-2 text-center text-sm text-red-600" }, "R$ ", motoboy.descontos.toFixed(2)), /* @__PURE__ */ React.createElement("td", { className: "px-3 py-2 text-center text-sm font-bold bg-blue-600 text-white" }, "R$ ", motoboy.totalLiquido.toFixed(2)));
+  }), /* @__PURE__ */ React.createElement("tr", { className: "bg-blue-600 text-white font-bold" }, /* @__PURE__ */ React.createElement("td", { className: "px-3 py-2 text-sm" }, "TOTAL LOG\xCDSTICA"), /* @__PURE__ */ React.createElement("td", { className: "px-3 py-2 text-center text-sm", colSpan: "11" }), /* @__PURE__ */ React.createElement("td", { className: "px-3 py-2 text-center text-sm" }, "R$ ", grupo.totais.liquido.toFixed(2)))))), /* @__PURE__ */ React.createElement("div", { className: "bg-gray-50 p-4 rounded-lg" }, /* @__PURE__ */ React.createElement("div", { className: "flex justify-between items-center" }, /* @__PURE__ */ React.createElement("span", { className: "text-lg font-semibold text-gray-900" }, "VALOR TOTAL A PAGAR ESTA LOJA:"), /* @__PURE__ */ React.createElement("span", { className: "text-2xl font-bold text-red-600" }, "R$ ", grupo.totais.final.toFixed(2))), /* @__PURE__ */ React.createElement("div", { className: "text-sm text-gray-600 mt-1" }, "Log\xEDstica R$ ", grupo.totais.liquido.toFixed(2), " + Taxa Admin R$ ", grupo.totais.taxaAdmin.toFixed(2), " + Supervis\xE3o R$ ", grupo.totais.taxaSupervisao.toFixed(2), " + D\xE9bitos R$ ", grupo.totais.debitos.toFixed(2))), grupo.debitos && grupo.debitos.length > 0 ? /* @__PURE__ */ React.createElement("div", { className: "mt-4 bg-red-50 p-4 rounded-lg" }, /* @__PURE__ */ React.createElement("h5", { className: "font-medium text-red-800 mb-2" }, "D\xE9bitos Pendentes Inclu\xEDdos:"), /* @__PURE__ */ React.createElement("div", { className: "space-y-1 text-sm" }, grupo.debitos.map((debito) => /* @__PURE__ */ React.createElement("div", { key: debito.id, className: "flex justify-between text-red-700" }, /* @__PURE__ */ React.createElement("span", null, debito.descricao, " (Venc: ", (/* @__PURE__ */ new Date(debito.dataVencimento + "T12:00:00")).toLocaleDateString("pt-BR"), ")"), /* @__PURE__ */ React.createElement("span", { className: "font-medium" }, "R$ ", debito.valor.toFixed(2)))))) : /* @__PURE__ */ React.createElement("div", { className: "mt-4 bg-green-50 p-4 rounded-lg" }, /* @__PURE__ */ React.createElement("h5", { className: "font-medium text-green-800 mb-2" }, "\u2705 Nenhum d\xE9bito pendente para esta loja")))))), relatorioConfig.dataInicio && relatorioConfig.dataFim && relatorioLojas.length === 0 && /* @__PURE__ */ React.createElement("div", { className: "bg-white rounded-lg shadow p-8" }, /* @__PURE__ */ React.createElement("div", { className: "text-center text-gray-500" }, /* @__PURE__ */ React.createElement("p", null, "Nenhuma jornada encontrada para o per\xEDodo selecionado.")))), activeTab === "relatorio-motoboys" && ["admin", "financeiro", "lojista"].includes(currentUser.tipo) && /* @__PURE__ */ React.createElement("div", { className: "space-y-6" }, /* @__PURE__ */ React.createElement("div", { className: "flex justify-between items-center" }, /* @__PURE__ */ React.createElement("h2", { className: "text-3xl font-bold text-gray-900" }, "Relat\xF3rio Motoboys por Loja"), relatorioMotoboyLojas.length > 0 && /* @__PURE__ */ React.createElement(
+    "button",
+    {
+      onClick: gerarPDFTodosMotoboys,
+      className: "bg-red-600 text-white px-6 py-2 rounded-md hover:bg-red-700 transition-colors flex items-center gap-2"
+    },
+    /* @__PURE__ */ React.createElement("svg", { className: "w-5 h-5", fill: "none", stroke: "currentColor", viewBox: "0 0 24 24" }, /* @__PURE__ */ React.createElement("path", { strokeLinecap: "round", strokeLinejoin: "round", strokeWidth: "2", d: "M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" })),
+    "Exportar Todos (PDF)"
+  )), /* @__PURE__ */ React.createElement("div", { className: "bg-white rounded-lg shadow p-6" }, /* @__PURE__ */ React.createElement("h3", { className: "text-lg font-medium text-gray-900 mb-4" }, "Gerar Relat\xF3rio de Motoboys"), /* @__PURE__ */ React.createElement("div", { className: "flex gap-4 items-end" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("label", { className: "block text-sm font-medium text-gray-700 mb-2" }, "Data In\xEDcio"), /* @__PURE__ */ React.createElement(
+    "input",
+    {
+      type: "date",
+      value: relatorioMotoboyConfig.dataInicio,
+      onChange: (e) => setRelatorioMotoboyConfig({ ...relatorioMotoboyConfig, dataInicio: e.target.value }),
+      className: "px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+    }
+  )), /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("label", { className: "block text-sm font-medium text-gray-700 mb-2" }, "Data Fim"), /* @__PURE__ */ React.createElement(
+    "input",
+    {
+      type: "date",
+      value: relatorioMotoboyConfig.dataFim,
+      onChange: (e) => setRelatorioMotoboyConfig({ ...relatorioMotoboyConfig, dataFim: e.target.value }),
+      className: "px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+    }
+  )), /* @__PURE__ */ React.createElement(
+    "button",
+    {
+      onClick: gerarRelatorioMotoboys,
+      className: "bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 transition-colors"
+    },
+    "Gerar Relat\xF3rio"
+  ))), relatorioMotoboyLojas.length > 0 && /* @__PURE__ */ React.createElement("div", { className: "space-y-8" }, /* @__PURE__ */ React.createElement("div", { className: "grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6" }, /* @__PURE__ */ React.createElement("div", { className: "bg-blue-500 text-white rounded-lg p-6" }, /* @__PURE__ */ React.createElement("h3", { className: "text-sm font-medium mb-2" }, "Total Motoboys"), /* @__PURE__ */ React.createElement("p", { className: "text-2xl font-bold" }, relatorioMotoboyLojas.reduce((total, loja) => {
+    const uniqueMotoboys = /* @__PURE__ */ new Set();
+    loja.motoboys.forEach((mb) => uniqueMotoboys.add(mb.motoboy.id));
+    return total + uniqueMotoboys.size;
+  }, 0))), /* @__PURE__ */ React.createElement("div", { className: "bg-green-500 text-white rounded-lg p-6" }, /* @__PURE__ */ React.createElement("h3", { className: "text-sm font-medium mb-2" }, "Total Jornadas"), /* @__PURE__ */ React.createElement("p", { className: "text-2xl font-bold" }, relatorioMotoboyLojas.reduce((total, loja) => total + loja.motoboys.reduce((subTotal, mb) => subTotal + mb.jornadas.length, 0), 0))), /* @__PURE__ */ React.createElement("div", { className: "bg-yellow-500 text-white rounded-lg p-6" }, /* @__PURE__ */ React.createElement("h3", { className: "text-sm font-medium mb-2" }, "Total Di\xE1rias"), /* @__PURE__ */ React.createElement("p", { className: "text-2xl font-bold" }, "R$ ", relatorioMotoboyLojas.reduce((total, loja) => total + loja.motoboys.reduce((subTotal, mb) => subTotal + mb.totalDiaria, 0), 0).toFixed(2))), /* @__PURE__ */ React.createElement("div", { className: "bg-purple-500 text-white rounded-lg p-6" }, /* @__PURE__ */ React.createElement("h3", { className: "text-sm font-medium mb-2" }, "Total Corridas"), /* @__PURE__ */ React.createElement("p", { className: "text-2xl font-bold" }, "R$ ", relatorioMotoboyLojas.reduce((total, loja) => total + loja.motoboys.reduce((subTotal, mb) => subTotal + mb.totalCorridas, 0), 0).toFixed(2)))), /* @__PURE__ */ React.createElement("div", { className: "flex justify-between items-center" }, /* @__PURE__ */ React.createElement("h3", { className: "text-xl font-semibold text-gray-900" }, "Motoboys por Loja"), /* @__PURE__ */ React.createElement("div", { className: "text-sm text-gray-600" }, "Per\xEDodo: ", (/* @__PURE__ */ new Date(relatorioMotoboyLojas[0]?.periodo.inicio + "T12:00:00")).toLocaleDateString("pt-BR"), " at\xE9 ", (/* @__PURE__ */ new Date(relatorioMotoboyLojas[0]?.periodo.fim + "T12:00:00")).toLocaleDateString("pt-BR"))), (() => {
+    const periodoSemanaAtual = obterPeriodoSemanaAtual();
+    const hoje = (/* @__PURE__ */ new Date()).toISOString().split("T")[0];
+    const adiantamentosSemanaAtual = getAdiantamentosFiltrados().filter(
+      (a) => a.data >= periodoSemanaAtual.inicio && a.data <= periodoSemanaAtual.fim && a.data >= periodoSemanaAtual.inicio && a.data <= hoje
+      // Só até hoje
+    );
+    if (adiantamentosSemanaAtual.length > 0) {
+      return /* @__PURE__ */ React.createElement("div", { className: "bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6" }, /* @__PURE__ */ React.createElement("h4", { className: "font-medium text-blue-800 mb-2" }, "\u{1F4C5} Adiantamentos da Semana Atual Inclu\xEDdos"), /* @__PURE__ */ React.createElement("p", { className: "text-sm text-blue-700" }, "Adiantamentos do per\xEDodo de ", /* @__PURE__ */ React.createElement("strong", null, (/* @__PURE__ */ new Date(periodoSemanaAtual.inicio + "T12:00:00")).toLocaleDateString("pt-BR")), " at\xE9 ", /* @__PURE__ */ React.createElement("strong", null, (/* @__PURE__ */ new Date(periodoSemanaAtual.fim + "T12:00:00")).toLocaleDateString("pt-BR")), " est\xE3o sendo automaticamente inclu\xEDdos nos relat\xF3rios para desconto dos motoboys."), /* @__PURE__ */ React.createElement("p", { className: "text-xs text-blue-600 mt-1" }, "Total de adiantamentos da semana atual: ", adiantamentosSemanaAtual.length, " | Valor total: R$ ", adiantamentosSemanaAtual.reduce((sum, a) => sum + (a.valor || 0), 0).toFixed(2)));
+    }
+    return null;
+  })(), relatorioMotoboyLojas.map((grupo) => /* @__PURE__ */ React.createElement("div", { key: grupo.loja.id, className: "bg-white rounded-lg shadow-lg overflow-hidden border border-gray-200" }, /* @__PURE__ */ React.createElement("div", { className: "px-6 py-4 bg-blue-50 border-b border-gray-200 flex justify-between items-center" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("h3", { className: "text-lg font-semibold text-gray-900" }, grupo.loja.nome), /* @__PURE__ */ React.createElement("p", { className: "text-sm text-gray-600" }, "CNPJ: ", grupo.loja.cnpj, " | Contato: ", grupo.loja.contato), /* @__PURE__ */ React.createElement("p", { className: "text-sm text-blue-600 font-medium mt-1" }, "Per\xEDodo: ", (/* @__PURE__ */ new Date(grupo.periodo.inicio + "T12:00:00")).toLocaleDateString("pt-BR"), " at\xE9 ", (/* @__PURE__ */ new Date(grupo.periodo.fim + "T12:00:00")).toLocaleDateString("pt-BR")), /* @__PURE__ */ React.createElement("p", { className: "text-sm text-gray-600 mt-1" }, grupo.motoboys.length, " motoboy(s) trabalharam nesta loja")), /* @__PURE__ */ React.createElement(
+    "button",
+    {
+      onClick: () => gerarPDFMotoboys(grupo),
+      className: "bg-green-600 text-white px-4 py-2 rounded-md hover:bg-green-700 transition-colors flex items-center gap-2"
+    },
+    /* @__PURE__ */ React.createElement("svg", { className: "w-4 h-4", fill: "none", stroke: "currentColor", viewBox: "0 0 24 24" }, /* @__PURE__ */ React.createElement("path", { strokeLinecap: "round", strokeLinejoin: "round", strokeWidth: "2", d: "M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" })),
+    "Gerar PDF"
+  )), /* @__PURE__ */ React.createElement("div", { className: "p-6" }, /* @__PURE__ */ React.createElement("h4", { className: "font-semibold text-gray-900 mb-4" }, "Detalhamento por Motoboy:"), /* @__PURE__ */ React.createElement("div", { className: "overflow-x-auto mb-6" }, /* @__PURE__ */ React.createElement("table", { className: "min-w-full" }, /* @__PURE__ */ React.createElement("thead", null, /* @__PURE__ */ React.createElement("tr", { className: "bg-gray-50" }, /* @__PURE__ */ React.createElement("th", { className: "px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase" }, "MOTOBOY"), /* @__PURE__ */ React.createElement("th", { className: "px-3 py-2 text-center text-xs font-medium text-gray-500 uppercase" }, "SEG"), /* @__PURE__ */ React.createElement("th", { className: "px-3 py-2 text-center text-xs font-medium text-gray-500 uppercase" }, "TER"), /* @__PURE__ */ React.createElement("th", { className: "px-3 py-2 text-center text-xs font-medium text-gray-500 uppercase" }, "QUA"), /* @__PURE__ */ React.createElement("th", { className: "px-3 py-2 text-center text-xs font-medium text-gray-500 uppercase" }, "QUI"), /* @__PURE__ */ React.createElement("th", { className: "px-3 py-2 text-center text-xs font-medium text-gray-500 uppercase" }, "SEX"), /* @__PURE__ */ React.createElement("th", { className: "px-3 py-2 text-center text-xs font-medium text-gray-500 uppercase" }, "SAB"), /* @__PURE__ */ React.createElement("th", { className: "px-3 py-2 text-center text-xs font-medium text-gray-500 uppercase" }, "DOM"), /* @__PURE__ */ React.createElement("th", { className: "px-3 py-2 text-center text-xs font-medium text-gray-500 uppercase" }, "VALOR DI\xC1RIA"), /* @__PURE__ */ React.createElement("th", { className: "px-3 py-2 text-center text-xs font-medium text-gray-500 uppercase" }, "TAXA"), /* @__PURE__ */ React.createElement("th", { className: "px-3 py-2 text-center text-xs font-medium text-gray-500 uppercase" }, "MISS\xD5ES"), /* @__PURE__ */ React.createElement("th", { className: "px-3 py-2 text-center text-xs font-medium text-gray-500 uppercase" }, "DESCONTOS"), /* @__PURE__ */ React.createElement("th", { className: "px-3 py-2 text-center text-xs font-medium text-gray-500 uppercase" }, "ADIANTAMENTO"), /* @__PURE__ */ React.createElement("th", { className: "px-3 py-2 text-center text-xs font-medium text-gray-500 uppercase" }, "TOTAL"))), /* @__PURE__ */ React.createElement("tbody", { className: "divide-y divide-gray-200" }, grupo.motoboys.map((motoboyData) => {
+    const jornadasPorDia = {};
+    motoboyData.jornadas.forEach((jornada) => {
+      const data = /* @__PURE__ */ new Date(jornada.data + "T12:00:00");
+      const diaSemana = data.getDay();
+      jornadasPorDia[diaSemana] = jornada;
+    });
+    return /* @__PURE__ */ React.createElement("tr", { key: motoboyData.motoboy.id, className: "hover:bg-gray-50" }, /* @__PURE__ */ React.createElement("td", { className: "px-3 py-2 text-sm font-medium text-gray-900" }, motoboyData.motoboy.nome), [1, 2, 3, 4, 5, 6, 0].map((dia) => {
+      const jornada = jornadasPorDia[dia];
+      if (!jornada) {
+        return /* @__PURE__ */ React.createElement("td", { key: dia, className: "px-3 py-2 text-center text-sm" }, /* @__PURE__ */ React.createElement("span", { className: "text-gray-400" }, "-"));
+      }
+      const valorTotalCorridasDia = jornada.valorCorridas || 0;
+      return /* @__PURE__ */ React.createElement("td", { key: dia, className: "px-3 py-2 text-center text-sm" }, /* @__PURE__ */ React.createElement("span", { className: "text-green-600 font-medium" }, "R$ ", valorTotalCorridasDia.toFixed(0)));
+    }), /* @__PURE__ */ React.createElement("td", { className: "px-3 py-2 text-center text-sm font-medium text-blue-600" }, "R$ ", motoboyData.totalDiaria.toFixed(2)), /* @__PURE__ */ React.createElement("td", { className: "px-3 py-2 text-center text-sm text-green-600" }, "R$ ", motoboyData.totalCorridas.toFixed(2)), /* @__PURE__ */ React.createElement("td", { className: "px-3 py-2 text-center text-sm" }, "R$ ", (motoboyData.totalComissoes + motoboyData.totalMissoes).toFixed(2)), /* @__PURE__ */ React.createElement("td", { className: "px-3 py-2 text-center text-sm text-red-600" }, "R$ ", motoboyData.totalDescontos.toFixed(2)), /* @__PURE__ */ React.createElement("td", { className: "px-3 py-2 text-center text-sm text-red-600 font-medium" }, "-R$ ", motoboyData.totalAdiantamentos.toFixed(2)), /* @__PURE__ */ React.createElement("td", { className: "px-3 py-2 text-center text-sm font-bold bg-blue-600 text-white" }, "R$ ", motoboyData.totalLiquido.toFixed(2)));
+  }), /* @__PURE__ */ React.createElement("tr", { className: "bg-blue-600 text-white font-bold" }, /* @__PURE__ */ React.createElement("td", { className: "px-3 py-2 text-sm" }, "TOTAL MOTOBOYS"), /* @__PURE__ */ React.createElement("td", { className: "px-3 py-2 text-center text-sm", colSpan: "12" }), /* @__PURE__ */ React.createElement("td", { className: "px-3 py-2 text-center text-sm" }, "R$ ", grupo.motoboys.reduce((sum, mb) => sum + mb.totalLiquido, 0).toFixed(2)))))), /* @__PURE__ */ React.createElement("div", { className: "bg-gray-50 p-4 rounded-lg" }, /* @__PURE__ */ React.createElement("div", { className: "grid grid-cols-2 md:grid-cols-4 gap-4 text-sm" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("span", { className: "text-gray-600" }, "Total Di\xE1rias:"), /* @__PURE__ */ React.createElement("span", { className: "ml-2 font-bold text-blue-600" }, "R$ ", grupo.motoboys.reduce((sum, mb) => sum + mb.totalDiaria, 0).toFixed(2))), /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("span", { className: "text-gray-600" }, "Total Corridas:"), /* @__PURE__ */ React.createElement("span", { className: "ml-2 font-bold text-green-600" }, "R$ ", grupo.motoboys.reduce((sum, mb) => sum + mb.totalCorridas, 0).toFixed(2))), /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("span", { className: "text-gray-600" }, "Total Extras:"), /* @__PURE__ */ React.createElement("span", { className: "ml-2 font-bold text-purple-600" }, "R$ ", grupo.motoboys.reduce((sum, mb) => sum + mb.totalComissoes + mb.totalMissoes, 0).toFixed(2))), /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("span", { className: "text-gray-600" }, "Total Adiantamentos:"), /* @__PURE__ */ React.createElement("span", { className: "ml-2 font-bold text-red-600" }, "R$ ", grupo.motoboys.reduce((sum, mb) => sum + mb.totalAdiantamentos, 0).toFixed(2))))))))), relatorioMotoboyConfig.dataInicio && relatorioMotoboyConfig.dataFim && relatorioMotoboyLojas.length === 0 && /* @__PURE__ */ React.createElement("div", { className: "bg-white rounded-lg shadow p-8" }, /* @__PURE__ */ React.createElement("div", { className: "text-center text-gray-500" }, /* @__PURE__ */ React.createElement("p", null, "Nenhuma jornada encontrada para o per\xEDodo selecionado.")))), activeTab === "pdr" && currentUser.tipo === "admin" && /* @__PURE__ */ React.createElement("div", { className: "space-y-6" }, /* @__PURE__ */ React.createElement("div", { className: "flex justify-between items-center" }, /* @__PURE__ */ React.createElement("h2", { className: "text-3xl font-bold text-gray-900" }, "PDR - Projeto de Desenvolvimento de Requisitos"), /* @__PURE__ */ React.createElement("div", { className: "text-sm text-gray-600" }, "Sistema de Gest\xE3o de Motoboy - Expresso Neves")), /* @__PURE__ */ React.createElement("div", { className: "bg-white rounded-lg shadow p-6" }, /* @__PURE__ */ React.createElement("h3", { className: "text-xl font-semibold text-gray-900 mb-4" }, "1. VIS\xC3O GERAL DO SISTEMA"), /* @__PURE__ */ React.createElement("div", { className: "space-y-4" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("h4", { className: "font-medium text-gray-900 mb-2" }, "1.1 Prop\xF3sito"), /* @__PURE__ */ React.createElement("p", { className: "text-gray-700" }, "O Sistema de Gest\xE3o de Motoboy da Expresso Neves foi desenvolvido para automatizar e centralizar o controle de jornadas de trabalho, pagamentos, adiantamentos e gera\xE7\xE3o de relat\xF3rios financeiros para m\xFAltiplas lojas e motoboys.")), /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("h4", { className: "font-medium text-gray-900 mb-2" }, "1.2 Escopo"), /* @__PURE__ */ React.createElement("ul", { className: "list-disc list-inside text-gray-700 space-y-1" }, /* @__PURE__ */ React.createElement("li", null, "Gest\xE3o de motoboys e suas informa\xE7\xF5es pessoais"), /* @__PURE__ */ React.createElement("li", null, "Controle de lojas e suas configura\xE7\xF5es financeiras"), /* @__PURE__ */ React.createElement("li", null, "Registro de jornadas de trabalho di\xE1rias"), /* @__PURE__ */ React.createElement("li", null, "Controle de adiantamentos e descontos"), /* @__PURE__ */ React.createElement("li", null, "Gest\xE3o de d\xE9bitos pendentes das lojas"), /* @__PURE__ */ React.createElement("li", null, "Gera\xE7\xE3o de relat\xF3rios financeiros consolidados"), /* @__PURE__ */ React.createElement("li", null, "Exporta\xE7\xE3o de relat\xF3rios em PDF"), /* @__PURE__ */ React.createElement("li", null, "Sistema de autentica\xE7\xE3o e autoriza\xE7\xE3o"))), /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("h4", { className: "font-medium text-gray-900 mb-2" }, "1.3 Tecnologias Utilizadas"), /* @__PURE__ */ React.createElement("ul", { className: "list-disc list-inside text-gray-700 space-y-1" }, /* @__PURE__ */ React.createElement("li", null, "Frontend: React.js 19.0.0 com Tailwind CSS"), /* @__PURE__ */ React.createElement("li", null, "Backend: Supabase (PostgreSQL)"), /* @__PURE__ */ React.createElement("li", null, "Gera\xE7\xE3o de PDF: jsPDF"), /* @__PURE__ */ React.createElement("li", null, "Armazenamento: localStorage (modo offline)"), /* @__PURE__ */ React.createElement("li", null, "Autentica\xE7\xE3o: Sistema pr\xF3prio com controle de sess\xE3o"), /* @__PURE__ */ React.createElement("li", null, "Hooks customizados: useStoredState (Hatch)"))), /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("h4", { className: "font-medium text-gray-900 mb-2" }, "1.4 Paleta de Cores do Sistema"), /* @__PURE__ */ React.createElement("div", { className: "bg-gray-50 p-4 rounded-lg" }, /* @__PURE__ */ React.createElement("div", { className: "grid grid-cols-2 lg:grid-cols-4 gap-3" }, /* @__PURE__ */ React.createElement("div", { className: "flex items-center space-x-2" }, /* @__PURE__ */ React.createElement("div", { className: "w-4 h-4 bg-red-800 rounded" }), /* @__PURE__ */ React.createElement("span", { className: "text-sm text-gray-700" }, "Sidebar: #991b1b (red-800)")), /* @__PURE__ */ React.createElement("div", { className: "flex items-center space-x-2" }, /* @__PURE__ */ React.createElement("div", { className: "w-4 h-4 bg-blue-600 rounded" }), /* @__PURE__ */ React.createElement("span", { className: "text-sm text-gray-700" }, "Bot\xF5es Prim\xE1rios: #2563eb (blue-600)")), /* @__PURE__ */ React.createElement("div", { className: "flex items-center space-x-2" }, /* @__PURE__ */ React.createElement("div", { className: "w-4 h-4 bg-green-600 rounded" }), /* @__PURE__ */ React.createElement("span", { className: "text-sm text-gray-700" }, "Valores Positivos: #16a34a (green-600)")), /* @__PURE__ */ React.createElement("div", { className: "flex items-center space-x-2" }, /* @__PURE__ */ React.createElement("div", { className: "w-4 h-4 bg-red-600 rounded" }), /* @__PURE__ */ React.createElement("span", { className: "text-sm text-gray-700" }, "Valores Negativos: #dc2626 (red-600)")), /* @__PURE__ */ React.createElement("div", { className: "flex items-center space-x-2" }, /* @__PURE__ */ React.createElement("div", { className: "w-4 h-4 bg-yellow-500 rounded" }), /* @__PURE__ */ React.createElement("span", { className: "text-sm text-gray-700" }, "Alertas: #eab308 (yellow-500)")), /* @__PURE__ */ React.createElement("div", { className: "flex items-center space-x-2" }, /* @__PURE__ */ React.createElement("div", { className: "w-4 h-4 bg-gray-100 rounded border" }), /* @__PURE__ */ React.createElement("span", { className: "text-sm text-gray-700" }, "Fundo: #f3f4f6 (gray-100)")), /* @__PURE__ */ React.createElement("div", { className: "flex items-center space-x-2" }, /* @__PURE__ */ React.createElement("div", { className: "w-4 h-4 bg-purple-600 rounded" }), /* @__PURE__ */ React.createElement("span", { className: "text-sm text-gray-700" }, "Destaques: #9333ea (purple-600)")), /* @__PURE__ */ React.createElement("div", { className: "flex items-center space-x-2" }, /* @__PURE__ */ React.createElement("div", { className: "w-4 h-4 bg-orange-500 rounded" }), /* @__PURE__ */ React.createElement("span", { className: "text-sm text-gray-700" }, "Secund\xE1rios: #f97316 (orange-500)"))))), /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("h4", { className: "font-medium text-gray-900 mb-2" }, "1.5 Depend\xEAncias do Sistema"), /* @__PURE__ */ React.createElement("div", { className: "bg-gray-50 p-4 rounded-lg" }, /* @__PURE__ */ React.createElement("div", { className: "space-y-2 text-sm" }, /* @__PURE__ */ React.createElement("div", { className: "grid grid-cols-1 md:grid-cols-2 gap-2" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("strong", null, "React:"), " 19.0.0"), /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("strong", null, "@supabase/supabase-js:"), " ^2.x"), /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("strong", null, "jsPDF:"), " ^2.x"), /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("strong", null, "react-hot-toast:"), " ^2.x"), /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("strong", null, "Tailwind CSS:"), " ^3.x"), /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("strong", null, "Hatch Hooks:"), " useStoredState"), /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("strong", null, "Browser APIs:"), " localStorage, Date")), /* @__PURE__ */ React.createElement("div", { className: "mt-3 text-xs text-gray-600" }, /* @__PURE__ */ React.createElement("p", null, /* @__PURE__ */ React.createElement("strong", null, "Nota:"), " O sistema utiliza apenas depend\xEAncias essenciais para manter a simplicidade e performance."))))))), /* @__PURE__ */ React.createElement("div", { className: "bg-white rounded-lg shadow p-6" }, /* @__PURE__ */ React.createElement("h3", { className: "text-xl font-semibold text-gray-900 mb-4" }, "2. ARQUITETURA DO SISTEMA"), /* @__PURE__ */ React.createElement("div", { className: "space-y-4" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("h4", { className: "font-medium text-gray-900 mb-2" }, "2.1 Estrutura de Dados"), /* @__PURE__ */ React.createElement("div", { className: "bg-gray-50 p-4 rounded-lg" }, /* @__PURE__ */ React.createElement("pre", { className: "text-sm text-gray-700" }, `// Colaboradores
+{
+  id: string,
+  nome: string,
+  email: string,
+  senha: string,
+  tipo: 'admin' | 'financeiro' | 'lojista',
+  lojaId: string | null,
+  ativo: boolean,
+  dataCriacao: string
+}
+
+// Motoboys
+{
+  id: string,
+  nome: string,
+  cpf: string,
+  telefone: string,
+  status: 'ativo' | 'inativo'
+}
+
+// Lojas
+{
+  id: string,
+  nome: string,
+  cnpj: string,
+  contato: string,
+  valorHoraSegSab: number,
+  valorHoraDomFeriado: number,
+  valorCorridaAte5km: number,
+  valorCorridaAcima5km: number,
+  taxaAdministrativa: number,
+  taxaSupervisao: number,
+  limiteValorFixo: number,
+  percentualTaxa: number,
+  usarTaxaPercentual: boolean
+}
+
+// Jornadas
+{
+  id: string,
+  data: string,
+  motoboyId: string,
+  lojaId: string,
+  valorDiaria: number,
+  valorCorridas: number,
+  comissoes: number,
+  missoes: number,
+  descontos: number,
+  eFeriado: boolean,
+  observacoes: string
+}
+
+// Adiantamentos
+{
+  id: string,
+  motoboyId: string,
+  lojaId: string,
+  valor: number,
+  data: string,
+  observacao: string
+}
+
+// D\xE9bitos Pendentes
+{
+  id: string,
+  lojaId: string,
+  descricao: string,
+  valor: number,
+  dataVencimento: string,
+  status: 'pendente' | 'pago',
+  dataCriacao: string
+}`))), /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("h4", { className: "font-medium text-gray-900 mb-2" }, "2.2 Estados Gerenciados"), /* @__PURE__ */ React.createElement("div", { className: "bg-gray-50 p-4 rounded-lg" }, /* @__PURE__ */ React.createElement("div", { className: "grid grid-cols-1 md:grid-cols-2 gap-4 text-sm" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("h5", { className: "font-medium text-gray-900 mb-2" }, "Estados Principais:"), /* @__PURE__ */ React.createElement("ul", { className: "list-disc list-inside text-gray-700 space-y-1" }, /* @__PURE__ */ React.createElement("li", null, "activeTab (navega\xE7\xE3o)"), /* @__PURE__ */ React.createElement("li", null, "currentUser (sess\xE3o)"), /* @__PURE__ */ React.createElement("li", null, "colaboradores (useStoredState)"), /* @__PURE__ */ React.createElement("li", null, "motoboys (useStoredState)"), /* @__PURE__ */ React.createElement("li", null, "lojas (useStoredState)"), /* @__PURE__ */ React.createElement("li", null, "jornadas (useStoredState)"), /* @__PURE__ */ React.createElement("li", null, "adiantamentos (useStoredState)"), /* @__PURE__ */ React.createElement("li", null, "debitosPendentes (useStoredState)"))), /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("h5", { className: "font-medium text-gray-900 mb-2" }, "Estados de Trabalho:"), /* @__PURE__ */ React.createElement("ul", { className: "list-disc list-inside text-gray-700 space-y-1" }, /* @__PURE__ */ React.createElement("li", null, "filtros (jornadas)"), /* @__PURE__ */ React.createElement("li", null, "jornadasFiltradas"), /* @__PURE__ */ React.createElement("li", null, "filtrosMotoboy"), /* @__PURE__ */ React.createElement("li", null, "motoboysFiltrados"), /* @__PURE__ */ React.createElement("li", null, "relatorioConfig"), /* @__PURE__ */ React.createElement("li", null, "relatorioLojas"), /* @__PURE__ */ React.createElement("li", null, "relatorioMotoboyConfig"), /* @__PURE__ */ React.createElement("li", null, "relatorioMotoboyLojas")))))), /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("h4", { className: "font-medium text-gray-900 mb-2" }, "2.3 Camadas da Aplica\xE7\xE3o"), /* @__PURE__ */ React.createElement("ul", { className: "list-disc list-inside text-gray-700 space-y-1" }, /* @__PURE__ */ React.createElement("li", null, /* @__PURE__ */ React.createElement("strong", null, "Camada de Apresenta\xE7\xE3o:"), " Interface React com componentes funcionais"), /* @__PURE__ */ React.createElement("li", null, /* @__PURE__ */ React.createElement("strong", null, "Camada de L\xF3gica de Neg\xF3cio:"), " Fun\xE7\xF5es de c\xE1lculo e valida\xE7\xE3o"), /* @__PURE__ */ React.createElement("li", null, /* @__PURE__ */ React.createElement("strong", null, "Camada de Dados:"), " Gerenciamento de estado com hooks React"), /* @__PURE__ */ React.createElement("li", null, /* @__PURE__ */ React.createElement("strong", null, "Camada de Persist\xEAncia:"), " Supabase + localStorage"))))), /* @__PURE__ */ React.createElement("div", { className: "bg-white rounded-lg shadow p-6" }, /* @__PURE__ */ React.createElement("h3", { className: "text-xl font-semibold text-gray-900 mb-4" }, "3. FUNCIONALIDADES DETALHADAS"), /* @__PURE__ */ React.createElement("div", { className: "space-y-6" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("h4", { className: "font-medium text-gray-900 mb-3" }, "3.1 Dashboard"), /* @__PURE__ */ React.createElement("div", { className: "bg-blue-50 p-4 rounded-lg" }, /* @__PURE__ */ React.createElement("h5", { className: "font-medium text-blue-900 mb-2" }, "Funcionalidades:"), /* @__PURE__ */ React.createElement("ul", { className: "list-disc list-inside text-blue-800 space-y-1" }, /* @__PURE__ */ React.createElement("li", null, "Visualiza\xE7\xE3o de m\xE9tricas por per\xEDodo selecionado"), /* @__PURE__ */ React.createElement("li", null, "Cards com faturamento, corridas, jornadas e motoboys ativos"), /* @__PURE__ */ React.createElement("li", null, "Lista de jornadas do per\xEDodo com filtros"), /* @__PURE__ */ React.createElement("li", null, "Resumo por loja com indicadores visuais")))), /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("h4", { className: "font-medium text-gray-900 mb-3" }, "3.2 Gest\xE3o de Motoboys"), /* @__PURE__ */ React.createElement("div", { className: "bg-green-50 p-4 rounded-lg" }, /* @__PURE__ */ React.createElement("h5", { className: "font-medium text-green-900 mb-2" }, "Funcionalidades:"), /* @__PURE__ */ React.createElement("ul", { className: "list-disc list-inside text-green-800 space-y-1" }, /* @__PURE__ */ React.createElement("li", null, "Cadastro com valida\xE7\xE3o de CPF e telefone"), /* @__PURE__ */ React.createElement("li", null, "Formata\xE7\xE3o autom\xE1tica de CPF (000.000.000-00)"), /* @__PURE__ */ React.createElement("li", null, "Formata\xE7\xE3o autom\xE1tica de telefone ((00) 00000-0000)"), /* @__PURE__ */ React.createElement("li", null, "Controle de status (ativo/inativo)"), /* @__PURE__ */ React.createElement("li", null, "Filtros por nome, CPF e status"), /* @__PURE__ */ React.createElement("li", null, "Edi\xE7\xE3o e exclus\xE3o de registros")))), /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("h4", { className: "font-medium text-gray-900 mb-3" }, "3.3 Gest\xE3o de Lojas"), /* @__PURE__ */ React.createElement("div", { className: "bg-yellow-50 p-4 rounded-lg" }, /* @__PURE__ */ React.createElement("h5", { className: "font-medium text-yellow-900 mb-2" }, "Funcionalidades:"), /* @__PURE__ */ React.createElement("ul", { className: "list-disc list-inside text-yellow-800 space-y-1" }, /* @__PURE__ */ React.createElement("li", null, "Cadastro completo com dados financeiros"), /* @__PURE__ */ React.createElement("li", null, "Configura\xE7\xE3o de valores de hora diferenciados"), /* @__PURE__ */ React.createElement("li", null, "Sistema de taxa administrativa avan\xE7ado"), /* @__PURE__ */ React.createElement("li", null, "Taxa fixa vs. taxa percentual autom\xE1tica"), /* @__PURE__ */ React.createElement("li", null, "Limite configur\xE1vel para mudan\xE7a de taxa"), /* @__PURE__ */ React.createElement("li", null, "Valores espec\xEDficos para corridas (at\xE9 5km e acima)")))), /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("h4", { className: "font-medium text-gray-900 mb-3" }, "3.4 Controle de Jornadas"), /* @__PURE__ */ React.createElement("div", { className: "bg-purple-50 p-4 rounded-lg" }, /* @__PURE__ */ React.createElement("h5", { className: "font-medium text-purple-900 mb-2" }, "Funcionalidades:"), /* @__PURE__ */ React.createElement("ul", { className: "list-disc list-inside text-purple-800 space-y-1" }, /* @__PURE__ */ React.createElement("li", null, "Cadastro individual e m\xFAltiplo de jornadas"), /* @__PURE__ */ React.createElement("li", null, "Controle de duplicatas por motoboy/data"), /* @__PURE__ */ React.createElement("li", null, "Marca\xE7\xE3o de feriados com hor\xE1rios diferenciados"), /* @__PURE__ */ React.createElement("li", null, "Registro de di\xE1rias, corridas, comiss\xF5es e miss\xF5es"), /* @__PURE__ */ React.createElement("li", null, "Sistema de descontos individuais"), /* @__PURE__ */ React.createElement("li", null, "Filtros avan\xE7ados por per\xEDodo, motoboy e loja"), /* @__PURE__ */ React.createElement("li", null, "Busca por nome e observa\xE7\xF5es")))), /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("h4", { className: "font-medium text-gray-900 mb-3" }, "3.5 Controle de Adiantamentos"), /* @__PURE__ */ React.createElement("div", { className: "bg-red-50 p-4 rounded-lg" }, /* @__PURE__ */ React.createElement("h5", { className: "font-medium text-red-900 mb-2" }, "Funcionalidades:"), /* @__PURE__ */ React.createElement("ul", { className: "list-disc list-inside text-red-800 space-y-1" }, /* @__PURE__ */ React.createElement("li", null, "Registro de adiantamentos por motoboy/loja"), /* @__PURE__ */ React.createElement("li", null, "Controle de data e observa\xE7\xF5es"), /* @__PURE__ */ React.createElement("li", null, "Inclus\xE3o autom\xE1tica nos relat\xF3rios"), /* @__PURE__ */ React.createElement("li", null, "Regra especial: semana atual inclu\xEDda automaticamente"), /* @__PURE__ */ React.createElement("li", null, "Visualiza\xE7\xE3o em tabela cronol\xF3gica")))), /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("h4", { className: "font-medium text-gray-900 mb-3" }, "3.6 Gest\xE3o de D\xE9bitos"), /* @__PURE__ */ React.createElement("div", { className: "bg-orange-50 p-4 rounded-lg" }, /* @__PURE__ */ React.createElement("h5", { className: "font-medium text-orange-900 mb-2" }, "Funcionalidades:"), /* @__PURE__ */ React.createElement("ul", { className: "list-disc list-inside text-orange-800 space-y-1" }, /* @__PURE__ */ React.createElement("li", null, "Cadastro de d\xE9bitos pendentes por loja"), /* @__PURE__ */ React.createElement("li", null, "Controle de vencimento com alerta visual"), /* @__PURE__ */ React.createElement("li", null, "Status: pendente, pago, cancelado"), /* @__PURE__ */ React.createElement("li", null, "Inclus\xE3o autom\xE1tica nos relat\xF3rios de cobran\xE7a"), /* @__PURE__ */ React.createElement("li", null, "Hist\xF3rico completo de d\xE9bitos")))))), /* @__PURE__ */ React.createElement("div", { className: "bg-white rounded-lg shadow p-6" }, /* @__PURE__ */ React.createElement("h3", { className: "text-xl font-semibold text-gray-900 mb-4" }, "4. L\xD3GICAS DE NEG\xD3CIO"), /* @__PURE__ */ React.createElement("div", { className: "space-y-6" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("h4", { className: "font-medium text-gray-900 mb-3" }, "4.1 C\xE1lculos Financeiros"), /* @__PURE__ */ React.createElement("div", { className: "bg-gray-50 p-4 rounded-lg" }, /* @__PURE__ */ React.createElement("div", { className: "space-y-3" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("h5", { className: "font-medium text-gray-900" }, "Taxa Administrativa Din\xE2mica:"), /* @__PURE__ */ React.createElement("div", { className: "text-sm text-gray-700 mt-1" }, /* @__PURE__ */ React.createElement("code", { className: "bg-gray-200 px-2 py-1 rounded" }, `// L\xF3gica atual implementada
+let valorTaxaAdmin = loja.taxaAdministrativa || 0;
+
+if (loja.usarTaxaPercentual && totalLiquidoLoja > (loja.limiteValorFixo || 0)) {
+    valorTaxaAdmin = (totalLiquidoLoja * (loja.percentualTaxa || 0)) / 100;
+    console.log('Taxa percentual aplicada:', loja.percentualTaxa + '%');
+} else {
+    console.log('Taxa fixa aplicada:', valorTaxaAdmin);
+}`))), /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("h5", { className: "font-medium text-gray-900" }, "Consolida\xE7\xE3o de Jornadas por Motoboy:"), /* @__PURE__ */ React.createElement("div", { className: "text-sm text-gray-700 mt-1" }, /* @__PURE__ */ React.createElement("code", { className: "bg-gray-200 px-2 py-1 rounded" }, `// Soma todas as jornadas do mesmo motoboy na mesma loja
+jornadasLoja.forEach(jornada => {
+    if (motoboysMap.has(motoboyId)) {
+        const existente = motoboysMap.get(motoboyId);
+        motoboysMap.set(motoboyId, {
+            ...existente,
+            valorDiaria: (existente.valorDiaria || 0) + (jornada.valorDiaria || 0),
+            valorCorridas: (existente.valorCorridas || 0) + (jornada.valorCorridas || 0),
+            comissoes: (existente.comissoes || 0) + (jornada.comissoes || 0),
+            missoes: (existente.missoes || 0) + (jornada.missoes || 0),
+            descontos: (existente.descontos || 0) + (jornada.descontos || 0),
+            jornadas: [...existente.jornadas, jornada]
+        });
+    }
+});`))), /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("h5", { className: "font-medium text-gray-900" }, "C\xE1lculo de Totais Finais:"), /* @__PURE__ */ React.createElement("div", { className: "text-sm text-gray-700 mt-1" }, /* @__PURE__ */ React.createElement("code", { className: "bg-gray-200 px-2 py-1 rounded" }, `// Para cada motoboy consolidado
+const totalBruto = (valorDiaria || 0) + (totalCorridas || 0) + 
+                  (comissoes || 0) + (missoes || 0);
+
+// Relat\xF3rio principal (SEM descontar adiantamentos)
+const totalLiquido = totalBruto - (descontos || 0);
+
+// Relat\xF3rio motoboys (COM desconto de adiantamentos)
+const totalLiquidoMotoboy = totalBruto - (descontos || 0) - (totalAdiantamentos || 0);
+
+// Total final da loja
+const totalFinal = totalLiquidoLoja + valorTaxaAdmin + valorTaxaSupervisao + totalDebitos;`)))))), /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("h4", { className: "font-medium text-gray-900 mb-3" }, "4.2 Regras de Adiantamento"), /* @__PURE__ */ React.createElement("div", { className: "bg-blue-50 p-4 rounded-lg" }, /* @__PURE__ */ React.createElement("h5", { className: "font-medium text-blue-900 mb-2" }, "Regra da Semana Atual (Segunda at\xE9 Quarta):"), /* @__PURE__ */ React.createElement("p", { className: "text-blue-800 text-sm mb-3" }, "Todos os adiantamentos do per\xEDodo de segunda-feira at\xE9 quarta-feira da semana atual s\xE3o automaticamente inclu\xEDdos nos relat\xF3rios para desconto dos motoboys, independente do per\xEDodo selecionado no relat\xF3rio."), /* @__PURE__ */ React.createElement("div", { className: "text-sm text-blue-700" }, /* @__PURE__ */ React.createElement("code", { className: "bg-blue-200 px-2 py-1 rounded" }, `// Implementa\xE7\xE3o atual da regra
+const obterPeriodoSemanaAtual = () => {
+    const hoje = new Date();
+    const diaSemana = hoje.getDay(); // 0=domingo, 1=segunda, etc.
+    
+    // Calcular segunda-feira da semana atual
+    const segunda = new Date(hoje);
+    const diasParaSegunda = diaSemana === 0 ? -6 : -(diaSemana - 1);
+    segunda.setDate(hoje.getDate() + diasParaSegunda);
+    
+    // Calcular quarta-feira da semana atual
+    const quarta = new Date(segunda);
+    quarta.setDate(segunda.getDate() + 2);
+    
+    return {
+        inicio: segunda.toISOString().split('T')[0],
+        fim: quarta.toISOString().split('T')[0]
+    };
 };
-var stdin_default = MotoboysSystem;
+
+// Filtro de adiantamentos nos relat\xF3rios
+const adiantamentosMotoboyLoja = adiantamentos.filter(a => {
+    if (a.motoboyId !== motoboyId || a.lojaId !== loja.id) return false;
+    
+    // Incluir adiantamentos do per\xEDodo do relat\xF3rio
+    const noPeriodoRelatorio = a.data >= dataInicio && a.data <= dataFim;
+    
+    // Incluir adiantamentos da semana atual (segunda at\xE9 quarta)
+    const naSemanaAtual = a.data >= periodoSemanaAtual.inicio && a.data <= periodoSemanaAtual.fim;
+    
+    return noPeriodoRelatorio || naSemanaAtual;
+});`)))), /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("h4", { className: "font-medium text-gray-900 mb-3" }, "4.3 Valida\xE7\xF5es"), /* @__PURE__ */ React.createElement("div", { className: "bg-green-50 p-4 rounded-lg" }, /* @__PURE__ */ React.createElement("div", { className: "space-y-2" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("h5", { className: "font-medium text-green-900" }, "Jornadas:"), /* @__PURE__ */ React.createElement("ul", { className: "list-disc list-inside text-green-800 text-sm" }, /* @__PURE__ */ React.createElement("li", null, "N\xE3o permite jornadas duplicadas (mesmo motoboy + data)"), /* @__PURE__ */ React.createElement("li", null, "Campos obrigat\xF3rios: data, motoboy, loja"), /* @__PURE__ */ React.createElement("li", null, "Valida\xE7\xE3o de formato de data"))), /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("h5", { className: "font-medium text-green-900" }, "Motoboys:"), /* @__PURE__ */ React.createElement("ul", { className: "list-disc list-inside text-green-800 text-sm" }, /* @__PURE__ */ React.createElement("li", null, "CPF com formata\xE7\xE3o autom\xE1tica"), /* @__PURE__ */ React.createElement("li", null, "Telefone com m\xE1scara (00) 00000-0000"), /* @__PURE__ */ React.createElement("li", null, "Nome obrigat\xF3rio"))), /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("h5", { className: "font-medium text-green-900" }, "Relat\xF3rios:"), /* @__PURE__ */ React.createElement("ul", { className: "list-disc list-inside text-green-800 text-sm" }, /* @__PURE__ */ React.createElement("li", null, "Data in\xEDcio deve ser \u2264 data fim"), /* @__PURE__ */ React.createElement("li", null, "Per\xEDodo obrigat\xF3rio para gera\xE7\xE3o"), /* @__PURE__ */ React.createElement("li", null, "Valida\xE7\xE3o de dados antes da gera\xE7\xE3o")))))))), /* @__PURE__ */ React.createElement("div", { className: "bg-white rounded-lg shadow p-6" }, /* @__PURE__ */ React.createElement("h3", { className: "text-xl font-semibold text-gray-900 mb-4" }, "5. SISTEMA DE RELAT\xD3RIOS"), /* @__PURE__ */ React.createElement("div", { className: "space-y-6" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("h4", { className: "font-medium text-gray-900 mb-3" }, "5.1 Relat\xF3rios por Loja"), /* @__PURE__ */ React.createElement("div", { className: "bg-blue-50 p-4 rounded-lg" }, /* @__PURE__ */ React.createElement("h5", { className: "font-medium text-blue-900 mb-2" }, "Estrutura:"), /* @__PURE__ */ React.createElement("ul", { className: "list-disc list-inside text-blue-800 space-y-1" }, /* @__PURE__ */ React.createElement("li", null, "Tabela com motoboys por dias da semana"), /* @__PURE__ */ React.createElement("li", null, "Colunas: MOTOBOY | SEG-DOM | DI\xC1RIA | TAXA | MISS\xD5ES | DESCONTOS | TOTAL"), /* @__PURE__ */ React.createElement("li", null, "Totais consolidados por loja"), /* @__PURE__ */ React.createElement("li", null, "Resumo financeiro com taxas e d\xE9bitos"), /* @__PURE__ */ React.createElement("li", null, "Valor final a pagar")))), /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("h4", { className: "font-medium text-gray-900 mb-3" }, "5.2 Relat\xF3rios de Motoboys"), /* @__PURE__ */ React.createElement("div", { className: "bg-green-50 p-4 rounded-lg" }, /* @__PURE__ */ React.createElement("h5", { className: "font-medium text-green-900 mb-2" }, "Estrutura:"), /* @__PURE__ */ React.createElement("ul", { className: "list-disc list-inside text-green-800 space-y-1" }, /* @__PURE__ */ React.createElement("li", null, "Mesmo formato da tabela principal"), /* @__PURE__ */ React.createElement("li", null, "Adiciona coluna ADIANTAMENTO"), /* @__PURE__ */ React.createElement("li", null, "Valores em negativo para adiantamentos"), /* @__PURE__ */ React.createElement("li", null, "Total l\xEDquido j\xE1 descontado"), /* @__PURE__ */ React.createElement("li", null, "Agrupamento por loja")))), /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("h4", { className: "font-medium text-gray-900 mb-3" }, "5.3 Gera\xE7\xE3o de PDF"), /* @__PURE__ */ React.createElement("div", { className: "bg-purple-50 p-4 rounded-lg" }, /* @__PURE__ */ React.createElement("h5", { className: "font-medium text-purple-900 mb-2" }, "Funcionalidades:"), /* @__PURE__ */ React.createElement("ul", { className: "list-disc list-inside text-purple-800 space-y-1" }, /* @__PURE__ */ React.createElement("li", null, "PDF individual por loja"), /* @__PURE__ */ React.createElement("li", null, "PDF consolidado de todas as lojas"), /* @__PURE__ */ React.createElement("li", null, "Quebra autom\xE1tica de p\xE1ginas"), /* @__PURE__ */ React.createElement("li", null, "Formata\xE7\xE3o profissional"), /* @__PURE__ */ React.createElement("li", null, "Cabe\xE7alhos e rodap\xE9s informativos"), /* @__PURE__ */ React.createElement("li", null, "Tabelas organizadas por se\xE7\xF5es")))))), /* @__PURE__ */ React.createElement("div", { className: "bg-white rounded-lg shadow p-6" }, /* @__PURE__ */ React.createElement("h3", { className: "text-xl font-semibold text-gray-900 mb-4" }, "6. SEGURAN\xC7A E AUTENTICA\xC7\xC3O"), /* @__PURE__ */ React.createElement("div", { className: "space-y-4" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("h4", { className: "font-medium text-gray-900 mb-2" }, "6.1 N\xEDveis de Acesso"), /* @__PURE__ */ React.createElement("div", { className: "bg-gray-50 p-4 rounded-lg" }, /* @__PURE__ */ React.createElement("div", { className: "space-y-2" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("strong", { className: "text-red-600" }, "Admin:"), /* @__PURE__ */ React.createElement("span", { className: "text-gray-700 ml-2" }, "Acesso completo a todas as funcionalidades")), /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("strong", { className: "text-blue-600" }, "Financeiro:"), /* @__PURE__ */ React.createElement("span", { className: "text-gray-700 ml-2" }, "Acesso a relat\xF3rios, jornadas e adiantamentos")), /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("strong", { className: "text-green-600" }, "Lojista:"), /* @__PURE__ */ React.createElement("span", { className: "text-gray-700 ml-2" }, "Acesso limitado a dashboard e jornadas"))))), /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("h4", { className: "font-medium text-gray-900 mb-2" }, "6.2 Controle de Sess\xE3o"), /* @__PURE__ */ React.createElement("ul", { className: "list-disc list-inside text-gray-700 space-y-1" }, /* @__PURE__ */ React.createElement("li", null, "Autentica\xE7\xE3o por email/senha"), /* @__PURE__ */ React.createElement("li", null, "Sess\xE3o persistente no localStorage"), /* @__PURE__ */ React.createElement("li", null, "Valida\xE7\xE3o de permiss\xF5es por p\xE1gina"), /* @__PURE__ */ React.createElement("li", null, "Logout autom\xE1tico e manual"))))), /* @__PURE__ */ React.createElement("div", { className: "bg-white rounded-lg shadow p-6" }, /* @__PURE__ */ React.createElement("h3", { className: "text-xl font-semibold text-gray-900 mb-4" }, "7. CONSIDERA\xC7\xD5ES T\xC9CNICAS"), /* @__PURE__ */ React.createElement("div", { className: "space-y-4" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("h4", { className: "font-medium text-gray-900 mb-2" }, "7.1 Performance"), /* @__PURE__ */ React.createElement("ul", { className: "list-disc list-inside text-gray-700 space-y-1" }, /* @__PURE__ */ React.createElement("li", null, "Uso extensivo de React hooks (useState, useEffect)"), /* @__PURE__ */ React.createElement("li", null, "Filtros client-side para responsividade (motoboysFiltrados, jornadasFiltradas)"), /* @__PURE__ */ React.createElement("li", null, "Processamento ass\xEDncrono de relat\xF3rios"), /* @__PURE__ */ React.createElement("li", null, "Caching de dados com useStoredState"), /* @__PURE__ */ React.createElement("li", null, "Valida\xE7\xE3o de dados no frontend"))), /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("h4", { className: "font-medium text-gray-900 mb-2" }, "7.2 Armazenamento e Sincroniza\xE7\xE3o"), /* @__PURE__ */ React.createElement("ul", { className: "list-disc list-inside text-gray-700 space-y-1" }, /* @__PURE__ */ React.createElement("li", null, "Estado persistente com useStoredState (hook do Hatch)"), /* @__PURE__ */ React.createElement("li", null, "Configura\xE7\xE3o Supabase para modo offline"), /* @__PURE__ */ React.createElement("li", null, "Backup autom\xE1tico no localStorage"), /* @__PURE__ */ React.createElement("li", null, "Dados iniciais hardcoded (admin padr\xE3o)"), /* @__PURE__ */ React.createElement("li", null, "Sincroniza\xE7\xE3o bidirecional planejada"), /* @__PURE__ */ React.createElement("li", null, "Modo offline-first com fallback"))), /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("h4", { className: "font-medium text-gray-900 mb-2" }, "7.3 Responsividade e UX"), /* @__PURE__ */ React.createElement("ul", { className: "list-disc list-inside text-gray-700 space-y-1" }, /* @__PURE__ */ React.createElement("li", null, "Design mobile-first com Tailwind CSS"), /* @__PURE__ */ React.createElement("li", null, "Breakpoints: sm, md, lg, xl"), /* @__PURE__ */ React.createElement("li", null, "Tabelas com scroll horizontal (overflow-x-auto)"), /* @__PURE__ */ React.createElement("li", null, "Formul\xE1rios adaptativos (grid responsivo)"), /* @__PURE__ */ React.createElement("li", null, "Sidebar colaps\xE1vel em dispositivos m\xF3veis"), /* @__PURE__ */ React.createElement("li", null, "Cards responsivos com grid din\xE2mico"))), /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("h4", { className: "font-medium text-gray-900 mb-2" }, "7.4 Tratamento de Erros"), /* @__PURE__ */ React.createElement("ul", { className: "list-disc list-inside text-gray-700 space-y-1" }, /* @__PURE__ */ React.createElement("li", null, "Valida\xE7\xE3o de formul\xE1rios com alerts"), /* @__PURE__ */ React.createElement("li", null, "Controle de duplicatas em jornadas"), /* @__PURE__ */ React.createElement("li", null, "Formata\xE7\xE3o autom\xE1tica de CPF e telefone"), /* @__PURE__ */ React.createElement("li", null, "Valida\xE7\xE3o de per\xEDodos em relat\xF3rios"), /* @__PURE__ */ React.createElement("li", null, "Tratamento de dados faltantes (|| 0)"), /* @__PURE__ */ React.createElement("li", null, "Console.log para debug detalhado"))))), /* @__PURE__ */ React.createElement("div", { className: "bg-white rounded-lg shadow p-6" }, /* @__PURE__ */ React.createElement("h3", { className: "text-xl font-semibold text-gray-900 mb-4" }, "8. FLUXOS DE TRABALHO"), /* @__PURE__ */ React.createElement("div", { className: "space-y-4" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("h4", { className: "font-medium text-gray-900 mb-2" }, "8.1 Fluxo de Cadastro de Jornada"), /* @__PURE__ */ React.createElement("div", { className: "bg-gray-50 p-4 rounded-lg text-sm" }, /* @__PURE__ */ React.createElement("ol", { className: "list-decimal list-inside space-y-1" }, /* @__PURE__ */ React.createElement("li", null, "Usu\xE1rio acessa p\xE1gina de Jornadas"), /* @__PURE__ */ React.createElement("li", null, 'Clica em "Nova Jornada" ou "Cadastro M\xFAltiplo"'), /* @__PURE__ */ React.createElement("li", null, "Preenche dados obrigat\xF3rios (data, motoboy, loja)"), /* @__PURE__ */ React.createElement("li", null, "Sistema valida duplicatas"), /* @__PURE__ */ React.createElement("li", null, "Dados s\xE3o salvos e aplicados filtros"), /* @__PURE__ */ React.createElement("li", null, "Notifica\xE7\xE3o de sucesso \xE9 exibida")))), /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("h4", { className: "font-medium text-gray-900 mb-2" }, "8.2 Fluxo de Gera\xE7\xE3o de Relat\xF3rios"), /* @__PURE__ */ React.createElement("div", { className: "bg-gray-50 p-4 rounded-lg text-sm" }, /* @__PURE__ */ React.createElement("ol", { className: "list-decimal list-inside space-y-1" }, /* @__PURE__ */ React.createElement("li", null, "Usu\xE1rio seleciona per\xEDodo (data in\xEDcio/fim)"), /* @__PURE__ */ React.createElement("li", null, "Sistema valida per\xEDodo"), /* @__PURE__ */ React.createElement("li", null, "Filtra jornadas do per\xEDodo"), /* @__PURE__ */ React.createElement("li", null, "Aplica regra de adiantamentos da semana atual"), /* @__PURE__ */ React.createElement("li", null, "Calcula totais por motoboy e loja"), /* @__PURE__ */ React.createElement("li", null, "Aplica taxas e d\xE9bitos pendentes"), /* @__PURE__ */ React.createElement("li", null, "Gera cards de relat\xF3rio"), /* @__PURE__ */ React.createElement("li", null, "Disponibiliza op\xE7\xE3o de PDF")))), /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("h4", { className: "font-medium text-gray-900 mb-2" }, "8.3 Fluxo de Adiantamento"), /* @__PURE__ */ React.createElement("div", { className: "bg-gray-50 p-4 rounded-lg text-sm" }, /* @__PURE__ */ React.createElement("ol", { className: "list-decimal list-inside space-y-1" }, /* @__PURE__ */ React.createElement("li", null, "Cadastro do adiantamento com data"), /* @__PURE__ */ React.createElement("li", null, "Sistema identifica per\xEDodo da semana atual"), /* @__PURE__ */ React.createElement("li", null, "Nos relat\xF3rios, inclui adiantamentos do per\xEDodo + semana atual"), /* @__PURE__ */ React.createElement("li", null, "Desconta automaticamente do total do motoboy"), /* @__PURE__ */ React.createElement("li", null, "Exibe aviso visual quando h\xE1 adiantamentos inclu\xEDdos")))))), /* @__PURE__ */ React.createElement("div", { className: "bg-white rounded-lg shadow p-6" }, /* @__PURE__ */ React.createElement("h3", { className: "text-xl font-semibold text-gray-900 mb-4" }, "9. M\xC9TRICAS DO SISTEMA"), /* @__PURE__ */ React.createElement("div", { className: "space-y-4" }, /* @__PURE__ */ React.createElement("div", { className: "grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4" }, /* @__PURE__ */ React.createElement("div", { className: "bg-blue-100 p-4 rounded-lg" }, /* @__PURE__ */ React.createElement("h4", { className: "font-medium text-blue-900" }, "Entidades"), /* @__PURE__ */ React.createElement("p", { className: "text-2xl font-bold text-blue-800" }, "6"), /* @__PURE__ */ React.createElement("p", { className: "text-sm text-blue-700" }, "Principais")), /* @__PURE__ */ React.createElement("div", { className: "bg-green-100 p-4 rounded-lg" }, /* @__PURE__ */ React.createElement("h4", { className: "font-medium text-green-900" }, "P\xE1ginas"), /* @__PURE__ */ React.createElement("p", { className: "text-2xl font-bold text-green-800" }, "10"), /* @__PURE__ */ React.createElement("p", { className: "text-sm text-green-700" }, "Funcionais")), /* @__PURE__ */ React.createElement("div", { className: "bg-yellow-100 p-4 rounded-lg" }, /* @__PURE__ */ React.createElement("h4", { className: "font-medium text-yellow-900" }, "Relat\xF3rios"), /* @__PURE__ */ React.createElement("p", { className: "text-2xl font-bold text-yellow-800" }, "2"), /* @__PURE__ */ React.createElement("p", { className: "text-sm text-yellow-700" }, "Tipos")), /* @__PURE__ */ React.createElement("div", { className: "bg-purple-100 p-4 rounded-lg" }, /* @__PURE__ */ React.createElement("h4", { className: "font-medium text-purple-900" }, "Perfis"), /* @__PURE__ */ React.createElement("p", { className: "text-2xl font-bold text-purple-800" }, "3"), /* @__PURE__ */ React.createElement("p", { className: "text-sm text-purple-700" }, "Acesso"))), /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("h4", { className: "font-medium text-gray-900 mb-2" }, "9.1 Complexidade e Estat\xEDsticas"), /* @__PURE__ */ React.createElement("div", { className: "bg-gray-50 p-4 rounded-lg" }, /* @__PURE__ */ React.createElement("div", { className: "space-y-2" }, /* @__PURE__ */ React.createElement("div", { className: "flex justify-between" }, /* @__PURE__ */ React.createElement("span", null, "Linhas de C\xF3digo:"), /* @__PURE__ */ React.createElement("span", { className: "font-medium" }, "~3.400")), /* @__PURE__ */ React.createElement("div", { className: "flex justify-between" }, /* @__PURE__ */ React.createElement("span", null, "Componentes React:"), /* @__PURE__ */ React.createElement("span", { className: "font-medium" }, "1 Principal (ExpressoNevesApp)")), /* @__PURE__ */ React.createElement("div", { className: "flex justify-between" }, /* @__PURE__ */ React.createElement("span", null, "Fun\xE7\xF5es de Neg\xF3cio:"), /* @__PURE__ */ React.createElement("span", { className: "font-medium" }, "~50")), /* @__PURE__ */ React.createElement("div", { className: "flex justify-between" }, /* @__PURE__ */ React.createElement("span", null, "Estados Gerenciados:"), /* @__PURE__ */ React.createElement("span", { className: "font-medium" }, "~27")), /* @__PURE__ */ React.createElement("div", { className: "flex justify-between" }, /* @__PURE__ */ React.createElement("span", null, "Hooks Utilizados:"), /* @__PURE__ */ React.createElement("span", { className: "font-medium" }, "useState, useEffect, useStoredState")), /* @__PURE__ */ React.createElement("div", { className: "flex justify-between" }, /* @__PURE__ */ React.createElement("span", null, "Formul\xE1rios:"), /* @__PURE__ */ React.createElement("span", { className: "font-medium" }, "8 (cadastro + filtros)")), /* @__PURE__ */ React.createElement("div", { className: "flex justify-between" }, /* @__PURE__ */ React.createElement("span", null, "Valida\xE7\xF5es:"), /* @__PURE__ */ React.createElement("span", { className: "font-medium" }, "~18 pontos de valida\xE7\xE3o")), /* @__PURE__ */ React.createElement("div", { className: "flex justify-between" }, /* @__PURE__ */ React.createElement("span", null, "Notifica\xE7\xF5es:"), /* @__PURE__ */ React.createElement("span", { className: "font-medium" }, "~35 pontos de feedback"))))), /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("h4", { className: "font-medium text-gray-900 mb-2" }, "9.2 Estrutura de Arquivos"), /* @__PURE__ */ React.createElement("div", { className: "bg-gray-50 p-4 rounded-lg" }, /* @__PURE__ */ React.createElement("div", { className: "text-sm text-gray-700 space-y-1" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("strong", null, "Arquivo Principal:"), " ExpressoNevesApp.js (componente \xFAnico)"), /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("strong", null, "Depend\xEAncias:"), " React, Supabase, jsPDF, react-hot-toast, Tailwind CSS"), /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("strong", null, "Configura\xE7\xE3o:"), " Supabase URL + Key hardcoded"), /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("strong", null, "Dados Iniciais:"), " Admin padr\xE3o no useStoredState"), /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("strong", null, "Estilo:"), " Tailwind classes inline"), /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("strong", null, "Notifica\xE7\xF5es:"), " Toaster configurado no root component")))))), /* @__PURE__ */ React.createElement("div", { className: "bg-white rounded-lg shadow p-6" }, /* @__PURE__ */ React.createElement("h3", { className: "text-xl font-semibold text-gray-900 mb-4" }, "10. CONCLUS\xC3O"), /* @__PURE__ */ React.createElement("div", { className: "space-y-4" }, /* @__PURE__ */ React.createElement("p", { className: "text-gray-700" }, "O Sistema de Gest\xE3o de Motoboy da Expresso Neves representa uma solu\xE7\xE3o completa para o controle financeiro e operacional de servi\xE7os de entrega. Com funcionalidades robustas de cadastro, controle de jornadas, gest\xE3o de adiantamentos e gera\xE7\xE3o de relat\xF3rios, o sistema atende \xE0s necessidades espec\xEDficas do neg\xF3cio."), /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("h4", { className: "font-medium text-gray-900 mb-2" }, "Principais Benef\xEDcios:"), /* @__PURE__ */ React.createElement("ul", { className: "list-disc list-inside text-gray-700 space-y-1" }, /* @__PURE__ */ React.createElement("li", null, "Automatiza\xE7\xE3o completa dos c\xE1lculos financeiros com l\xF3gica de taxa din\xE2mica"), /* @__PURE__ */ React.createElement("li", null, "Controle preciso de adiantamentos com regra da semana atual"), /* @__PURE__ */ React.createElement("li", null, "Relat\xF3rios profissionais em PDF com duas modalidades (loja e motoboy)"), /* @__PURE__ */ React.createElement("li", null, "Interface intuitiva e responsiva com paleta de cores consistente"), /* @__PURE__ */ React.createElement("li", null, "Sistema de permiss\xF5es com 3 n\xEDveis (admin, financeiro, lojista)"), /* @__PURE__ */ React.createElement("li", null, "Sistema de notifica\xE7\xF5es profissionais com react-hot-toast"), /* @__PURE__ */ React.createElement("li", null, "Confirma\xE7\xF5es interativas para a\xE7\xF5es cr\xEDticas"), /* @__PURE__ */ React.createElement("li", null, "Exporta\xE7\xE3o completa de d\xE9bitos em PDF e CSV"), /* @__PURE__ */ React.createElement("li", null, "Edi\xE7\xE3o completa de d\xE9bitos com valida\xE7\xE3o"), /* @__PURE__ */ React.createElement("li", null, "Flexibilidade para diferentes tipos de loja com configura\xE7\xF5es personalizadas"), /* @__PURE__ */ React.createElement("li", null, "Consolida\xE7\xE3o inteligente de m\xFAltiplas jornadas por motoboy"), /* @__PURE__ */ React.createElement("li", null, "Formata\xE7\xE3o autom\xE1tica de CPF e telefone"), /* @__PURE__ */ React.createElement("li", null, "Cadastro m\xFAltiplo de jornadas para efici\xEAncia"), /* @__PURE__ */ React.createElement("li", null, "Debug detalhado com console.log para desenvolvimento"))), /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("h4", { className: "font-medium text-gray-900 mb-2" }, "Tecnologias-Chave:"), /* @__PURE__ */ React.createElement("div", { className: "flex flex-wrap gap-2" }, /* @__PURE__ */ React.createElement("span", { className: "bg-blue-100 text-blue-800 px-2 py-1 rounded text-sm" }, "React.js 19.0.0"), /* @__PURE__ */ React.createElement("span", { className: "bg-green-100 text-green-800 px-2 py-1 rounded text-sm" }, "Tailwind CSS"), /* @__PURE__ */ React.createElement("span", { className: "bg-purple-100 text-purple-800 px-2 py-1 rounded text-sm" }, "Supabase"), /* @__PURE__ */ React.createElement("span", { className: "bg-yellow-100 text-yellow-800 px-2 py-1 rounded text-sm" }, "jsPDF"), /* @__PURE__ */ React.createElement("span", { className: "bg-indigo-100 text-indigo-800 px-2 py-1 rounded text-sm" }, "react-hot-toast"), /* @__PURE__ */ React.createElement("span", { className: "bg-red-100 text-red-800 px-2 py-1 rounded text-sm" }, "localStorage"), /* @__PURE__ */ React.createElement("span", { className: "bg-orange-100 text-orange-800 px-2 py-1 rounded text-sm" }, "useStoredState"))), /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("h4", { className: "font-medium text-gray-900 mb-2" }, "Limita\xE7\xF5es e Melhorias Futuras:"), /* @__PURE__ */ React.createElement("ul", { className: "list-disc list-inside text-gray-700 space-y-1" }, /* @__PURE__ */ React.createElement("li", null, "Componente monol\xEDtico (poderia ser dividido em subcomponentes)"), /* @__PURE__ */ React.createElement("li", null, "Configura\xE7\xE3o Supabase hardcoded (deveria ser vari\xE1vel de ambiente)"), /* @__PURE__ */ React.createElement("li", null, "Aus\xEAncia de testes unit\xE1rios"), /* @__PURE__ */ React.createElement("li", null, "Valida\xE7\xE3o de dados apenas no frontend"), /* @__PURE__ */ React.createElement("li", null, "Sem controle de vers\xE3o de dados"), /* @__PURE__ */ React.createElement("li", null, "Funcionalidade de sincroniza\xE7\xE3o offline limitada"), /* @__PURE__ */ React.createElement("li", null, "Depend\xEAncia \xFAnica de react-hot-toast (pode ser considerada m\xEDnima)"))), /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("h4", { className: "font-medium text-gray-900 mb-2" }, "Melhorias Recentes Implementadas:"), /* @__PURE__ */ React.createElement("ul", { className: "list-disc list-inside text-gray-700 space-y-1" }, /* @__PURE__ */ React.createElement("li", null, "\u2705 Sistema de notifica\xE7\xF5es profissionais com react-hot-toast"), /* @__PURE__ */ React.createElement("li", null, "\u2705 Substitui\xE7\xE3o completa de alertas nativos do browser"), /* @__PURE__ */ React.createElement("li", null, "\u2705 Confirma\xE7\xF5es interativas para a\xE7\xF5es cr\xEDticas"), /* @__PURE__ */ React.createElement("li", null, "\u2705 Edi\xE7\xE3o completa de d\xE9bitos com valida\xE7\xE3o"), /* @__PURE__ */ React.createElement("li", null, "\u2705 Exporta\xE7\xE3o de d\xE9bitos em PDF e CSV"), /* @__PURE__ */ React.createElement("li", null, "\u2705 Feedback visual consistente em todas as opera\xE7\xF5es"), /* @__PURE__ */ React.createElement("li", null, "\u2705 Toaster configurado com tema personalizado"))), /* @__PURE__ */ React.createElement("div", { className: "bg-blue-50 p-4 rounded-lg" }, /* @__PURE__ */ React.createElement("p", { className: "text-blue-800 font-medium" }, "Este PDR documenta completamente o sistema atual, incluindo as melhorias recentes implementadas com sistema de notifica\xE7\xF5es profissionais e funcionalidades avan\xE7adas de gest\xE3o de d\xE9bitos. Serve como refer\xEAncia para manuten\xE7\xE3o, melhorias futuras e treinamento de novos desenvolvedores.")), /* @__PURE__ */ React.createElement("div", { className: "bg-green-50 p-4 rounded-lg mt-4" }, /* @__PURE__ */ React.createElement("h4", { className: "font-medium text-green-900 mb-2" }, "\u{1F389} Sistema Completamente Atualizado"), /* @__PURE__ */ React.createElement("p", { className: "text-green-800 text-sm" }, "O sistema agora conta com notifica\xE7\xF5es profissionais, edi\xE7\xE3o completa de d\xE9bitos, exporta\xE7\xE3o avan\xE7ada e experi\xEAncia de usu\xE1rio significativamente melhorada. Todas as funcionalidades foram testadas e validadas."))))), activeTab === "colaboradores" && currentUser.tipo === "admin" && /* @__PURE__ */ React.createElement("div", { className: "space-y-6" }, /* @__PURE__ */ React.createElement("div", { className: "flex justify-between items-center" }, /* @__PURE__ */ React.createElement("h2", { className: "text-3xl font-bold text-gray-900" }, "Colaboradores")), /* @__PURE__ */ React.createElement("div", { className: "bg-white rounded-lg shadow p-6" }, /* @__PURE__ */ React.createElement("h3", { className: "text-lg font-medium text-gray-900 mb-4" }, editingColaborador ? "Editar Colaborador" : "Cadastrar Novo Colaborador"), /* @__PURE__ */ React.createElement("form", { onSubmit: addColaborador, className: "space-y-4" }, /* @__PURE__ */ React.createElement("div", { className: "grid grid-cols-1 md:grid-cols-2 gap-4" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("label", { className: "block text-sm font-medium text-gray-700 mb-2" }, "Nome"), /* @__PURE__ */ React.createElement(
+    "input",
+    {
+      type: "text",
+      value: colaboradorForm.nome,
+      onChange: (e) => setColaboradorForm({ ...colaboradorForm, nome: e.target.value }),
+      className: "w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500",
+      required: true
+    }
+  )), /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("label", { className: "block text-sm font-medium text-gray-700 mb-2" }, "Email"), /* @__PURE__ */ React.createElement(
+    "input",
+    {
+      type: "email",
+      value: colaboradorForm.email,
+      onChange: (e) => setColaboradorForm({ ...colaboradorForm, email: e.target.value }),
+      className: "w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500",
+      required: true
+    }
+  ))), /* @__PURE__ */ React.createElement("div", { className: "grid grid-cols-1 md:grid-cols-2 gap-4" }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("label", { className: "block text-sm font-medium text-gray-700 mb-2" }, "Senha"), /* @__PURE__ */ React.createElement(
+    "input",
+    {
+      type: "password",
+      value: colaboradorForm.senha,
+      onChange: (e) => setColaboradorForm({ ...colaboradorForm, senha: e.target.value }),
+      className: "w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500",
+      required: true
+    }
+  )), /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("label", { className: "block text-sm font-medium text-gray-700 mb-2" }, "Tipo"), /* @__PURE__ */ React.createElement(
+    "select",
+    {
+      value: colaboradorForm.tipo,
+      onChange: (e) => setColaboradorForm({ ...colaboradorForm, tipo: e.target.value, lojaId: e.target.value !== "lojista" ? "" : colaboradorForm.lojaId }),
+      className: "w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500",
+      required: true
+    },
+    /* @__PURE__ */ React.createElement("option", { value: "admin" }, "Administrador"),
+    /* @__PURE__ */ React.createElement("option", { value: "financeiro" }, "Financeiro"),
+    /* @__PURE__ */ React.createElement("option", { value: "lojista" }, "Lojista")
+  ))), colaboradorForm.tipo === "lojista" && /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("label", { className: "block text-sm font-medium text-gray-700 mb-2" }, "Loja Associada"), /* @__PURE__ */ React.createElement(
+    "select",
+    {
+      value: colaboradorForm.lojaId,
+      onChange: (e) => setColaboradorForm({ ...colaboradorForm, lojaId: e.target.value }),
+      className: "w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500",
+      required: true
+    },
+    /* @__PURE__ */ React.createElement("option", { value: "" }, "Selecione uma loja"),
+    lojas.map((loja) => /* @__PURE__ */ React.createElement("option", { key: loja.id, value: loja.id }, loja.nome))
+  )), /* @__PURE__ */ React.createElement("div", { className: "flex gap-4" }, /* @__PURE__ */ React.createElement(
+    "button",
+    {
+      type: "submit",
+      className: "bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 transition-colors"
+    },
+    editingColaborador ? "Atualizar Colaborador" : "Cadastrar Colaborador"
+  ), editingColaborador && /* @__PURE__ */ React.createElement(
+    "button",
+    {
+      type: "button",
+      onClick: cancelarEdicaoColaborador,
+      className: "bg-gray-600 text-white px-4 py-2 rounded-md hover:bg-gray-700 transition-colors"
+    },
+    "Cancelar"
+  )))), /* @__PURE__ */ React.createElement("div", { className: "bg-white rounded-lg shadow overflow-hidden" }, /* @__PURE__ */ React.createElement("table", { className: "min-w-full divide-y divide-gray-200" }, /* @__PURE__ */ React.createElement("thead", { className: "bg-gray-50" }, /* @__PURE__ */ React.createElement("tr", null, /* @__PURE__ */ React.createElement("th", { className: "px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider" }, "Nome"), /* @__PURE__ */ React.createElement("th", { className: "px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider" }, "Email"), /* @__PURE__ */ React.createElement("th", { className: "px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider" }, "Tipo"), /* @__PURE__ */ React.createElement("th", { className: "px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider" }, "Loja"), /* @__PURE__ */ React.createElement("th", { className: "px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider" }, "Status"), /* @__PURE__ */ React.createElement("th", { className: "px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider" }, "A\xE7\xF5es"))), /* @__PURE__ */ React.createElement("tbody", { className: "bg-white divide-y divide-gray-200" }, colaboradores.map((colaborador) => {
+    const loja = colaborador.lojaId ? lojas.find((l) => l.id === colaborador.lojaId) : null;
+    return /* @__PURE__ */ React.createElement("tr", { key: colaborador.id }, /* @__PURE__ */ React.createElement("td", { className: "px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900" }, colaborador.nome), /* @__PURE__ */ React.createElement("td", { className: "px-6 py-4 whitespace-nowrap text-sm text-gray-500" }, colaborador.email), /* @__PURE__ */ React.createElement("td", { className: "px-6 py-4 whitespace-nowrap text-sm text-gray-500" }, /* @__PURE__ */ React.createElement("span", { className: `inline-flex px-2 py-1 text-xs font-semibold rounded-full ${colaborador.tipo === "admin" ? "bg-red-100 text-red-800" : colaborador.tipo === "financeiro" ? "bg-blue-100 text-blue-800" : "bg-green-100 text-green-800"}` }, colaborador.tipo)), /* @__PURE__ */ React.createElement("td", { className: "px-6 py-4 whitespace-nowrap text-sm text-gray-500" }, loja ? loja.nome : "-"), /* @__PURE__ */ React.createElement("td", { className: "px-6 py-4 whitespace-nowrap" }, /* @__PURE__ */ React.createElement("span", { className: `inline-flex px-2 py-1 text-xs font-semibold rounded-full ${colaborador.ativo ? "bg-green-100 text-green-800" : "bg-red-100 text-red-800"}` }, colaborador.ativo ? "Ativo" : "Inativo")), /* @__PURE__ */ React.createElement("td", { className: "px-6 py-4 whitespace-nowrap text-sm font-medium" }, /* @__PURE__ */ React.createElement("div", { className: "flex gap-2" }, /* @__PURE__ */ React.createElement(
+      "button",
+      {
+        onClick: () => editColaborador(colaborador),
+        className: "text-blue-600 hover:text-blue-900"
+      },
+      "Editar"
+    ), /* @__PURE__ */ React.createElement(
+      "button",
+      {
+        onClick: () => toggleColaboradorStatus(colaborador.id),
+        className: `${colaborador.ativo ? "text-yellow-600 hover:text-yellow-900" : "text-green-600 hover:text-green-900"}`,
+        disabled: colaborador.id === currentUser?.id
+      },
+      colaborador.ativo ? "Desativar" : "Ativar"
+    ), /* @__PURE__ */ React.createElement(
+      "button",
+      {
+        onClick: () => deleteColaborador(colaborador.id),
+        className: "text-red-600 hover:text-red-900",
+        disabled: colaborador.id === currentUser?.id
+      },
+      "Excluir"
+    ))));
+  }))), colaboradores.length === 0 && /* @__PURE__ */ React.createElement("div", { className: "text-center py-8 text-gray-500" }, "Nenhum colaborador cadastrado ainda."))))), /* @__PURE__ */ React.createElement(
+    Toaster,
+    {
+      position: "top-right",
+      toastOptions: {
+        duration: 4e3,
+        style: {
+          background: "#ffffff",
+          color: "#374151",
+          border: "1px solid #d1d5db",
+          borderRadius: "0.5rem",
+          fontSize: "14px",
+          fontWeight: "500",
+          boxShadow: "0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05)"
+        },
+        success: {
+          style: {
+            background: "#f0fdf4",
+            color: "#166534",
+            border: "1px solid #bbf7d0"
+          },
+          iconTheme: {
+            primary: "#16a34a",
+            secondary: "#ffffff"
+          }
+        },
+        error: {
+          style: {
+            background: "#fef2f2",
+            color: "#991b1b",
+            border: "1px solid #fecaca"
+          },
+          iconTheme: {
+            primary: "#dc2626",
+            secondary: "#ffffff"
+          }
+        },
+        loading: {
+          style: {
+            background: "#eff6ff",
+            color: "#1e40af",
+            border: "1px solid #bfdbfe"
+          }
+        }
+      }
+    }
+  ));
+};
+var stdin_default = ExpressoNevesApp;
 export {
   stdin_default as default
 };

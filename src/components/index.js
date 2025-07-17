@@ -1,0 +1,9 @@
+export { default as PDR } from './PDR';
+export { default as Dashboard } from './Dashboard';
+export { default as Motoboys } from './Motoboys';
+export { default as Lojas } from './Lojas';
+export { default as Jornadas } from './Jornadas';
+export { default as Adiantamentos } from './Adiantamentos';
+export { default as Debitos } from './Debitos';
+export { default as RelatorioLojas } from './RelatorioLojas';
+export { default as RelatorioMotoboys } from './RelatorioMotoboys'; 
