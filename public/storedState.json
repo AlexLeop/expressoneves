@@ -1,0 +1,104 @@
+{
+  "motoboys": [
+    {
+      "nome": "João Silva",
+      "cpf": "123.456.789-01",
+      "telefone": "(11) 99999-1234",
+      "status": "ativo"
+    },
+    {
+      "nome": "Maria Santos",
+      "cpf": "987.654.321-09",
+      "telefone": "(11) 88888-5678",
+      "status": "ativo"
+    },
+    {
+      "nome": "Pedro Oliveira",
+      "cpf": "456.789.123-45",
+      "telefone": "(11) 77777-9012",
+      "status": "inativo"
+    }
+  ],
+  "lojas": [
+    {
+      "nome": "Loja Centro",
+      "cnpj": "12.345.678/0001-90",
+      "contato": "(11) 3333-1111",
+      "valorHoraSegSab": 12.00,
+      "valorHoraDomFeriado": 13.33,
+      "valorCorridaAte5km": 5.00,
+      "valorCorridaAcima5km": 8.00,
+      "taxaAdministrativa": 350.00,
+      "taxaSupervisao": 50.00
+    },
+    {
+      "nome": "Loja Norte",
+      "cnpj": "98.765.432/0001-10",
+      "contato": "(11) 4444-2222",
+      "valorHoraSegSab": 12.00,
+      "valorHoraDomFeriado": 13.33,
+      "valorCorridaAte5km": 5.00,
+      "valorCorridaAcima5km": 8.00,
+      "taxaAdministrativa": 350.00,
+      "taxaSupervisao": 50.00
+    }
+  ],
+  "jornadas": [
+    {
+      "data": "2025-01-15",
+      "motoboyId": "123.456.789-01",
+      "lojaId": "12.345.678/0001-90",
+      "valorDiaria": 120.00,
+      "corridasAte5km": 8,
+      "corridasAcima5km": 3,
+      "comissoes": 25.50,
+      "missoes": 15.00,
+      "descontos": 5.00,
+      "eFeriado": false,
+      "observacoes": "Dia normal de trabalho"
+    },
+    {
+      "data": "2025-01-16",
+      "motoboyId": "987.654.321-09",
+      "lojaId": "98.765.432/0001-10",
+      "valorDiaria": 120.00,
+      "corridasAte5km": 6,
+      "corridasAcima5km": 5,
+      "comissoes": 32.00,
+      "missoes": 20.00,
+      "descontos": 0.00,
+      "eFeriado": false,
+      "observacoes": "Bom desempenho"
+    }
+  ],
+  "adiantamentos": [
+    {
+      "motoboyId": "123.456.789-01",
+      "lojaId": "12.345.678/0001-90",
+      "valor": 50.00,
+      "data": "2025-01-10",
+      "observacao": "Adiantamento para combustível"
+    }
+  ],
+  "colaboradores": [
+    {
+      "nome": "Admin Sistema",
+      "email": "admin@sistema.com",
+      "senha": "admin123",
+      "tipo": "admin",
+      "lojaId": null,
+      "ativo": true,
+      "dataCriacao": "2025-01-01"
+    }
+  ],
+  "debitosPendentes": [
+    {
+      "lojaId": "12.345.678/0001-90",
+      "descricao": "Taxa administrativa mensal",
+      "valor": 350.00,
+      "dataVencimento": "2025-02-01",
+      "status": "pendente",
+      "dataCriacao": "2025-01-01"
+    }
+  ]
+}
