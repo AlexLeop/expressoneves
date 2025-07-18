@@ -1,4 +1,5 @@
-import { supabase } from './supabaseClient.js';
+// Usando integração nativa do Supabase
+const supabase = window.supabase;
 
 // Motoboys
 export async function getMotoboys() {

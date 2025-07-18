@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
-import * as db from '../services/database';
+import * as db from '../services/database.js';
 import toast from 'react-hot-toast';
 
 const AppContext = createContext();
